@@ -1616,14 +1616,8 @@ static long imx415_compat_ioctl32(struct v4l2_subdev *sd,
 	case RKMODULE_SET_QUICK_STREAM:
 
 		ret = copy_from_user(&stream, up, sizeof(u32));
-		if (!ret) {
-			if (stream)
-				ret = imx415_write_reg(imx415->client, IMX415_REG_CTRL_MODE,
-					IMX415_REG_VALUE_08BIT, IMX415_MODE_STREAMING);
-			else
-				ret = imx415_write_reg(imx415->client, IMX415_REG_CTRL_MODE,
-					IMX415_REG_VALUE_08BIT, IMX415_MODE_SW_STANDBY);
-		}
+		if (!ret)
+			ret = imx415_ioctl(sd, cmd, &stream);
 		break;
 
 	default:
@@ -1968,7 +1962,7 @@ static int imx415_set_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	}
 
-	if (pm_runtime_get(&client->dev) <= 0)
+	if (!pm_runtime_get_if_in_use(&client->dev))
 		return 0;
 
 	switch (ctrl->id) {

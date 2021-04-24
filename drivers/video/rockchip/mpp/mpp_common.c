@@ -211,9 +211,13 @@ int mpp_power_off(struct mpp_dev *mpp)
 	if (mpp->hw_ops->clk_off)
 		mpp->hw_ops->clk_off(mpp);
 
-	pm_runtime_mark_last_busy(mpp->dev);
-	pm_runtime_put_autosuspend(mpp->dev);
 	pm_relax(mpp->dev);
+	if (mpp_taskqueue_get_pending_task(mpp->queue)) {
+		pm_runtime_mark_last_busy(mpp->dev);
+		pm_runtime_put_autosuspend(mpp->dev);
+	} else {
+		pm_runtime_put_sync_suspend(mpp->dev);
+	}
 
 	return 0;
 }
@@ -316,10 +320,12 @@ static void mpp_task_timeout_work(struct work_struct *work_s)
 					     struct mpp_task,
 					     timeout_work);
 
-	if (test_and_set_bit(TASK_STATE_HANDLE, &task->state))
+	if (test_and_set_bit(TASK_STATE_HANDLE, &task->state)) {
+		mpp_err("task has been handled\n");
 		return;
+	}
 
-	mpp_err("task %p processing timed out!\n", task);
+	mpp_err("task %p processing time out!\n", task);
 	if (!task->session) {
 		mpp_err("task %p, task->session is null.\n", task);
 		return;
@@ -902,7 +908,20 @@ static int mpp_process_request(struct mpp_session *session,
 	case MPP_CMD_QUERY_HW_ID: {
 		struct mpp_hw_info *hw_info;
 
-		mpp = session->mpp;
+		mpp = NULL;
+		if (session && session->mpp) {
+			mpp = session->mpp;
+		} else {
+			u32 client_type;
+
+			if (get_user(client_type, (u32 __user *)req->data))
+				return -EFAULT;
+
+			mpp_debug(DEBUG_IOCTL, "client %d\n", client_type);
+			client_type = array_index_nospec(client_type, MPP_DEVICE_BUTT);
+			if (test_bit(client_type, &srv->hw_support))
+				mpp = srv->sub_devices[client_type];
+		}
 		if (!mpp)
 			return -EINVAL;
 		hw_info = mpp->var->hw_info;
@@ -977,7 +996,8 @@ static int mpp_process_request(struct mpp_session *session,
 	} break;
 	case MPP_CMD_SET_REG_WRITE:
 	case MPP_CMD_SET_REG_READ:
-	case MPP_CMD_SET_REG_ADDR_OFFSET: {
+	case MPP_CMD_SET_REG_ADDR_OFFSET:
+	case MPP_CMD_SET_RCB_INFO: {
 		msgs->flags |= req->flags;
 		msgs->set_cnt++;
 	} break;
@@ -1542,20 +1562,44 @@ int mpp_task_dump_mem_region(struct mpp_dev *mpp,
 int mpp_task_dump_reg(struct mpp_dev *mpp,
 		      struct mpp_task *task)
 {
-	u32 i, s, e;
-
 	if (!task)
 		return -EIO;
 
-	mpp_err("--- dump register ---\n");
-	if (task->reg) {
-		s = task->hw_info->reg_start;
-		e = task->hw_info->reg_end;
+	if (mpp_debug_unlikely(DEBUG_DUMP_ERR_REG)) {
+		mpp_err("--- dump task register ---\n");
+		if (task->reg) {
+			u32 i;
+			u32 s = task->hw_info->reg_start;
+			u32 e = task->hw_info->reg_end;
+
+			for (i = s; i <= e; i++) {
+				u32 reg = i * sizeof(u32);
+
+				mpp_err("reg[%03d]: %04x: 0x%08x\n",
+					i, reg, task->reg[i]);
+			}
+		}
+	}
+
+	return 0;
+}
+
+int mpp_task_dump_hw_reg(struct mpp_dev *mpp, struct mpp_task *task)
+{
+	if (!task)
+		return -EIO;
+
+	if (mpp_debug_unlikely(DEBUG_DUMP_ERR_REG)) {
+		u32 i;
+		u32 s = task->hw_info->reg_start;
+		u32 e = task->hw_info->reg_end;
+
+		mpp_err("--- dump hardware register ---\n");
 		for (i = s; i <= e; i++) {
 			u32 reg = i * sizeof(u32);
 
 			mpp_err("reg[%03d]: %04x: 0x%08x\n",
-				i, reg, task->reg[i]);
+				i, reg, readl_relaxed(mpp->reg_base + reg));
 		}
 	}
 
@@ -1567,7 +1611,6 @@ static int mpp_iommu_handle(struct iommu_domain *iommu,
 			    unsigned long iova,
 			    int status, void *arg)
 {
-	u32 i, s, e;
 	struct mpp_dev *mpp = (struct mpp_dev *)arg;
 	struct mpp_task *task = mpp_taskqueue_get_running_task(mpp->queue);
 
@@ -1577,16 +1620,7 @@ static int mpp_iommu_handle(struct iommu_domain *iommu,
 		return -EIO;
 
 	mpp_task_dump_mem_region(mpp, task);
-
-	s = task->hw_info->reg_start;
-	e = task->hw_info->reg_end;
-	mpp_err("--- dump register ---\n");
-	for (i = s; i <= e; i++) {
-		u32 reg = i * sizeof(u32);
-
-		mpp_err("reg[%03d]: %04x: 0x%08x\n",
-			i, reg, readl_relaxed(mpp->reg_base + reg));
-	}
+	mpp_task_dump_hw_reg(mpp, task);
 
 	if (mpp->iommu_info->hdl)
 		mpp->iommu_info->hdl(iommu, iommu_dev, iova, status, arg);
@@ -1721,26 +1755,31 @@ int mpp_dev_remove(struct mpp_dev *mpp)
 
 irqreturn_t mpp_dev_irq(int irq, void *param)
 {
-	irqreturn_t ret = IRQ_NONE;
+	bool ret = false;
 	struct mpp_dev *mpp = param;
 	struct mpp_task *task = mpp->cur_task;
+	irqreturn_t irq_ret = IRQ_NONE;
 
 	if (task) {
 		/* if wait or delayed work timeout, abort request will turn on,
 		 * isr should not to response, and handle it in delayed work
 		 */
-		if (test_and_set_bit(TASK_STATE_HANDLE, &task->state))
-			return IRQ_HANDLED;
+		if (test_and_set_bit(TASK_STATE_HANDLE, &task->state)) {
+			mpp_err("error, task has been handled, irq_status %08x\n", mpp->irq_status);
+			goto done;
+		}
 		cancel_delayed_work(&task->timeout_work);
-
+		/* normal condition, set state and wake up isr thread */
 		set_bit(TASK_STATE_IRQ, &task->state);
-		if (mpp->dev_ops->irq)
-			ret = mpp->dev_ops->irq(mpp);
+		ret = true;
 	} else {
 		mpp_err("error, task is null\n");
 	}
+done:
+	if (mpp->dev_ops->irq)
+		irq_ret = mpp->dev_ops->irq(mpp);
 
-	return ret;
+	return ret ? irq_ret : IRQ_HANDLED;
 }
 
 irqreturn_t mpp_dev_isr_sched(int irq, void *param)
@@ -2017,7 +2056,11 @@ int px30_workaround_combo_init(struct mpp_dev *mpp)
 			iommu->mmu_num++;
 		}
 		iommu->grf_val = mpp->grf_info->val & MPP_GRF_VAL_MASK;
+		if (mpp->hw_ops->clk_on)
+			mpp->hw_ops->clk_on(mpp);
 		iommu->dte_addr =  mpp_iommu_get_dte_addr(iommu);
+		if (mpp->hw_ops->clk_off)
+			mpp->hw_ops->clk_off(mpp);
 		INIT_LIST_HEAD(&iommu->link);
 		mutex_lock(&mpp->queue->mmu_lock);
 		list_add_tail(&iommu->link, &mpp->queue->mmu_list);

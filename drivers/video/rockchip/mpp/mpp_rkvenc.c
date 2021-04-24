@@ -26,6 +26,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/proc_fs.h>
 #include <linux/nospec.h>
+#include <linux/workqueue.h>
 #include <soc/rockchip/pm_domains.h>
 #include <soc/rockchip/rockchip_ipa.h>
 #include <soc/rockchip/rockchip_opp_select.h>
@@ -40,6 +41,9 @@
 #include "mpp_common.h"
 
 #define RKVENC_DRIVER_NAME			"mpp_rkvenc"
+
+#define IOMMU_GET_BUS_ID(x)			(((x) >> 6) & 0x1f)
+#define IOMMU_PAGE_SIZE				SZ_4K
 
 #define	RKVENC_SESSION_MAX_BUFFERS		40
 /* The maximum registers number of all the version */
@@ -197,6 +201,12 @@ struct rkvenc_dev {
 	struct thermal_cooling_device *devfreq_cooling;
 	struct monitor_dev_info *mdev_info;
 #endif
+	/* for iommu pagefault handle */
+	struct work_struct iommu_work;
+	struct workqueue_struct *iommu_wq;
+	struct page *aux_page;
+	unsigned long aux_iova;
+	unsigned long fault_iova;
 };
 
 struct link_table_elem {
@@ -226,7 +236,7 @@ static const u16 trans_tbl_h264e[] = {
 static const u16 trans_tbl_h265e[] = {
 	70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
 	80, 81, 82, 83, 84, 85, 86, 124, 125,
-	126, 127, 128, 129, 130, 131
+	126, 127, 128, 129, 130, 131, 95, 96
 };
 
 static struct mpp_trans_info trans_rk_rkvenc[] = {
@@ -336,6 +346,7 @@ static void *rkvenc_alloc_task(struct mpp_session *session,
 	ret = rkvenc_extract_task_msg(task, msgs);
 	if (ret)
 		goto fail;
+	task->fmt = RKVENC_GET_FORMAT(task->reg[RKVENC_ENC_PIC_INDEX]);
 	/* process fd in register */
 	if (!(msgs->flags & MPP_FLAGS_REG_FD_NO_TRANS)) {
 		ret = mpp_translate_reg_address(session,
@@ -373,8 +384,11 @@ static int rkvenc_write_req_l2(struct mpp_dev *mpp,
 	int i;
 
 	for (i = start_idx; i < end_idx; i++) {
-		mpp_write_relaxed(mpp, RKVENC_L2_ADDR_BASE, i * sizeof(u32));
-		mpp_write_relaxed(mpp, RKVENC_L2_WRITE_BASE, regs[i]);
+		int reg = i * sizeof(u32);
+
+		mpp_debug(DEBUG_SET_REG_L2, "reg[%03d]: %04x: 0x%08x\n", i, reg, regs[i]);
+		writel_relaxed(reg, mpp->reg_base + RKVENC_L2_ADDR_BASE);
+		writel_relaxed(regs[i], mpp->reg_base + RKVENC_L2_WRITE_BASE);
 	}
 
 	return 0;
@@ -387,8 +401,11 @@ static int rkvenc_read_req_l2(struct mpp_dev *mpp,
 	int i;
 
 	for (i = start_idx; i < end_idx; i++) {
-		mpp_write_relaxed(mpp, RKVENC_L2_ADDR_BASE, i * sizeof(u32));
-		regs[i] = mpp_read_relaxed(mpp, RKVENC_L2_READ_BASE);
+		int reg = i * sizeof(u32);
+
+		writel_relaxed(reg, mpp->reg_base + RKVENC_L2_ADDR_BASE);
+		regs[i] = readl_relaxed(mpp->reg_base + RKVENC_L2_READ_BASE);
+		mpp_debug(DEBUG_GET_REG_L2, "reg[%03d]: %04x: 0x%08x\n", i, reg, regs[i]);
 	}
 
 	return 0;
@@ -475,6 +492,7 @@ static int rkvenc_irq(struct mpp_dev *mpp)
 	if (!mpp->irq_status)
 		return IRQ_NONE;
 
+	mpp_write(mpp, RKVENC_INT_MSK_BASE, 0x100);
 	mpp_write(mpp, RKVENC_INT_CLR_BASE, 0xffffffff);
 	udelay(5);
 	mpp_write(mpp, RKVENC_INT_STATUS_BASE, 0);
@@ -488,6 +506,9 @@ static int rkvenc_isr(struct mpp_dev *mpp)
 {
 	struct rkvenc_task *task = NULL;
 	struct mpp_task *mpp_task = mpp->cur_task;
+	struct rkvenc_dev *enc = to_rkvenc_dev(mpp);
+
+	mpp_debug_enter();
 
 	/* FIXME use a spin lock here */
 	if (!mpp_task) {
@@ -504,11 +525,21 @@ static int rkvenc_isr(struct mpp_dev *mpp)
 	if (task->irq_status & RKVENC_INT_ERROR_BITS) {
 		atomic_inc(&mpp->reset_request);
 		/* dump register */
-		if (mpp_debug_unlikely(DEBUG_DUMP_ERR_REG))
-			mpp_task_dump_reg(mpp, mpp_task);
+		if (mpp_debug_unlikely(DEBUG_DUMP_ERR_REG)) {
+			mpp_debug(DEBUG_DUMP_ERR_REG, "irq_status: %08x\n",
+				  task->irq_status);
+			mpp_task_dump_hw_reg(mpp, mpp_task);
+		}
+	}
+
+	/* unmap reserve buffer */
+	if (enc->aux_iova != -1) {
+		iommu_unmap(mpp->iommu_info->domain, enc->aux_iova, IOMMU_PAGE_SIZE);
+		enc->aux_iova = -1;
 	}
 
 	mpp_task_finish(mpp_task->session, mpp_task);
+
 	mpp_debug_leave();
 
 	return IRQ_HANDLED;
@@ -778,7 +809,7 @@ static int rkvenc_procfs_init(struct mpp_dev *mpp)
 	mpp_procfs_create_u32("session_buffers", 0644,
 			      enc->procfs, &mpp->session_max_buffers);
 	/* for show session info */
-	proc_create_single_data("session_info", 0644,
+	proc_create_single_data("sessions-info", 0444,
 				enc->procfs, rkvenc_show_session_info, mpp);
 
 	return 0;
@@ -929,6 +960,40 @@ static struct monitor_dev_profile enc_mdevp = {
 	.high_temp_adjust = rockchip_monitor_dev_high_temp_adjust,
 };
 
+static int rv1126_get_soc_info(struct device *dev, struct device_node *np,
+			       int *bin, int *process)
+{
+	int ret = 0, value = -EINVAL;
+
+	if (of_property_match_string(np, "nvmem-cell-names", "performance") >= 0) {
+		ret = rockchip_get_efuse_value(np, "performance", &value);
+		if (ret) {
+			dev_err(dev, "Failed to get soc performance value\n");
+			return ret;
+		}
+		if (value == 0x1)
+			*bin = 1;
+		else
+			*bin = 0;
+	}
+	if (*bin >= 0)
+		dev_info(dev, "bin=%d\n", *bin);
+
+	return ret;
+}
+
+static const struct of_device_id rockchip_rkvenc_of_match[] = {
+	{
+		.compatible = "rockchip,rv1109",
+		.data = (void *)&rv1126_get_soc_info,
+	},
+	{
+		.compatible = "rockchip,rv1126",
+		.data = (void *)&rv1126_get_soc_info,
+	},
+	{},
+};
+
 static int rkvenc_devfreq_init(struct mpp_dev *mpp)
 {
 	struct rkvenc_dev *enc = to_rkvenc_dev(mpp);
@@ -951,7 +1016,7 @@ static int rkvenc_devfreq_init(struct mpp_dev *mpp)
 		return 0;
 	}
 
-	ret = rockchip_init_opp_table(mpp->dev, NULL,
+	ret = rockchip_init_opp_table(mpp->dev, rockchip_rkvenc_of_match,
 				      "leakage", "venc");
 	if (ret) {
 		dev_err(mpp->dev, "failed to init_opp_table\n");
@@ -1036,6 +1101,57 @@ static int rkvenc_devfreq_remove(struct mpp_dev *mpp)
 }
 #endif
 
+static void rkvenc_iommu_handle_work(struct work_struct *work_s)
+{
+	int ret = 0;
+	struct rkvenc_dev *enc = container_of(work_s, struct rkvenc_dev, iommu_work);
+	struct mpp_dev *mpp = &enc->mpp;
+	unsigned long page_iova = 0;
+
+	mpp_debug_enter();
+
+	/* avoid another page fault occur after page fault */
+	down_write(&mpp->iommu_info->rw_sem);
+
+	if (enc->aux_iova != -1) {
+		iommu_unmap(mpp->iommu_info->domain, enc->aux_iova, IOMMU_PAGE_SIZE);
+		enc->aux_iova = -1;
+	}
+
+	page_iova = round_down(enc->fault_iova, SZ_4K);
+	ret = iommu_map(mpp->iommu_info->domain, page_iova,
+			page_to_phys(enc->aux_page), IOMMU_PAGE_SIZE,
+			IOMMU_READ | IOMMU_WRITE);
+	if (ret)
+		mpp_err("iommu_map iova %lx error.\n", page_iova);
+	else
+		enc->aux_iova = page_iova;
+
+	rk_iommu_unmask_irq(mpp->dev);
+	up_write(&mpp->iommu_info->rw_sem);
+
+	mpp_debug_leave();
+}
+
+static int rkvenc_iommu_fault_handle(struct iommu_domain *iommu,
+				     struct device *iommu_dev,
+				     unsigned long iova, int status, void *arg)
+{
+	struct mpp_dev *mpp = (struct mpp_dev *)arg;
+	struct rkvenc_dev *enc = to_rkvenc_dev(mpp);
+
+	mpp_debug_enter();
+	mpp_debug(DEBUG_IOMMU, "IOMMU_GET_BUS_ID(status)=%d\n", IOMMU_GET_BUS_ID(status));
+	if (IOMMU_GET_BUS_ID(status)) {
+		enc->fault_iova = iova;
+		rk_iommu_mask_irq(mpp->dev);
+		queue_work(enc->iommu_wq, &enc->iommu_work);
+	}
+	mpp_debug_leave();
+
+	return 0;
+}
+
 static int rkvenc_init(struct mpp_dev *mpp)
 {
 	struct rkvenc_dev *enc = to_rkvenc_dev(mpp);
@@ -1077,14 +1193,48 @@ static int rkvenc_init(struct mpp_dev *mpp)
 	if (ret)
 		mpp_err("failed to add venc devfreq\n");
 #endif
+
+	/* for mmu pagefault */
+	enc->aux_page = alloc_page(GFP_KERNEL);
+	if (!enc->aux_page) {
+		dev_err(mpp->dev, "allocate a page for auxiliary usage\n");
+		return -ENOMEM;
+	}
+	enc->aux_iova = -1;
+
+	enc->iommu_wq = create_singlethread_workqueue("iommu_wq");
+	if (!enc->iommu_wq) {
+		mpp_err("failed to create workqueue\n");
+		return -ENOMEM;
+	}
+	INIT_WORK(&enc->iommu_work, rkvenc_iommu_handle_work);
+
+	mpp->iommu_info->hdl = rkvenc_iommu_fault_handle;
+
 	return ret;
 }
 
 static int rkvenc_exit(struct mpp_dev *mpp)
 {
+	struct rkvenc_dev *enc = to_rkvenc_dev(mpp);
+
 #ifdef CONFIG_PM_DEVFREQ
 	rkvenc_devfreq_remove(mpp);
 #endif
+
+	if (enc->aux_page)
+		__free_page(enc->aux_page);
+
+	if (enc->aux_iova != -1) {
+		iommu_unmap(mpp->iommu_info->domain, enc->aux_iova, IOMMU_PAGE_SIZE);
+		enc->aux_iova = -1;
+	}
+
+	if (enc->iommu_wq) {
+		destroy_workqueue(enc->iommu_wq);
+		enc->iommu_wq = NULL;
+	}
+
 	return 0;
 }
 
@@ -1214,9 +1364,8 @@ static int rkvenc_set_freq(struct mpp_dev *mpp,
 		mutex_unlock(&enc->devfreq->lock);
 		return 0;
 	}
-#else
-	mpp_clk_set_rate(&enc->core_clk_info, task->clk_mode);
 #endif
+	mpp_clk_set_rate(&enc->core_clk_info, task->clk_mode);
 
 	return 0;
 }

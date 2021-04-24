@@ -203,8 +203,25 @@
 #define VAD_SAMPLE_CNT			0x7c
 #define VAD_NOISE_DATA			0x100
 
-/* acodec */
+/* RK1808 SOC */
+#define RK1808_I2S0			0xff7e0800
+#define RK1808_I2S1			0xff7f0800
+#define RK1808_PDM			0xff800400
+
+/* RK3308 SOC */
 #define ACODEC_BASE			0xff560000
 #define ACODEC_ADC_ANA_CON0		0X340
+
+#define RK3308_I2S_8CH_0		0xff300800
+#define RK3308_I2S_8CH_1		0xff310800
+#define RK3308_I2S_8CH_2		0xff320800
+#define RK3308_I2S_8CH_3		0xff330800
+#define RK3308_PDM_8CH			0xff380400
+
+/* RK3568 SOC */
+#define RK3568_I2S_8CH_1		0xfe410800
+#define RK3568_I2S_2CH_2		0xfe420800
+#define RK3568_I2S_2CH_3		0xfe430800
+#define RK3568_PDM			0xfe440400
 
 #endif

@@ -1,6 +1,14 @@
 #
 # Phy drivers for Rockchip platforms
 #
+config PHY_ROCKCHIP_CSI2_DPHY
+	tristate "Rockchip CSI2 D-PHY Driver"
+	depends on VIDEO_V4L2 && VIDEO_V4L2_SUBDEV_API
+	depends on ARCH_ROCKCHIP && OF
+	select GENERIC_PHY
+	help
+	  Enable this to support the Rockchip CSI2 DPHY.
+
 config PHY_ROCKCHIP_DP
 	tristate "Rockchip Display Port PHY Driver"
 	depends on ARCH_ROCKCHIP && OF
@@ -87,6 +95,13 @@ config PHY_ROCKCHIP_NANENG_COMBO_PHY
 	help
 	  Enable this to support the Rockchip PCIe/USB3.0/SATA/QSGMII
 	  combo PHY with NaNeng IP block.
+
+config PHY_ROCKCHIP_NANENG_EDP
+	tristate "Rockchip Naneng eDP Transmitter PHY driver"
+	depends on ARCH_ROCKCHIP && OF
+	select GENERIC_PHY
+	help
+	  Support for Rockchip eDP Transmitter PHY with Naneng IP block.
 
 config PHY_ROCKCHIP_NANENG_USB2
 	tristate "Rockchip NANENG USB2PHY Driver"

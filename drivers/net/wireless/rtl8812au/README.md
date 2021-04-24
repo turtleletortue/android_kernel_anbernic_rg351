@@ -1,207 +1,378 @@
-## RTL8812AU/21AU and RTL8814AU drivers
-Only for use with Linux & Android
+##### [Click for USB WiFi Adapter Information for Linux](https://github.com/morrownr/USB-WiFi)
 
-[![Monitor mode](https://img.shields.io/badge/monitor%20mode-working-brightgreen.svg)](#)
-[![Frame Injection](https://img.shields.io/badge/frame%20injection-working-brightgreen.svg)](#)
-[![GitHub version](https://raster.shields.io/badge/version-v5.6.4.2-lightgrey.svg)](#)
-[![GitHub issues](https://img.shields.io/github/issues/aircrack-ng/rtl8812au.svg)](https://github.com/aircrack-ng/rtl8812au/issues)
-[![GitHub forks](https://img.shields.io/github/forks/aircrack-ng/rtl8812au.svg)](https://github.com/aircrack-ng/rtl8812au/network)
-[![GitHub stars](https://img.shields.io/github/stars/aircrack-ng/rtl8812au.svg)](https://github.com/aircrack-ng/rtl8812au/stargazers)
-[![Build Status](https://travis-ci.org/aircrack-ng/rtl8812au.svg?branch=v5.6.4.2)](https://travis-ci.org/aircrack-ng/rtl8812au)
-[![GitHub license](https://img.shields.io/github/license/aircrack-ng/rtl8812au.svg)](https://github.com/aircrack-ng/rtl8812au/blob/master/LICENSE)
-<br>
-[![Kali](https://img.shields.io/badge/Kali-supported-blue.svg)](https://www.kali.org)
-[![Arch](https://img.shields.io/badge/Arch-supported-blue.svg)](https://www.archlinux.org)
-[![Armbian](https://img.shields.io/badge/Armbian-supported-blue.svg)](https://www.armbian.com)
-[![ArchLinux](https://img.shields.io/badge/ArchLinux-supported-blue.svg)](https://img.shields.io/badge/ArchLinux-supported-blue.svg)
-[![aircrack-ng](https://img.shields.io/badge/aircrack--ng-supported-blue.svg)](https://github.com/aircrack-ng/aircrack-ng)
-[![wifite2](https://img.shields.io/badge/wifite2-supported-blue.svg)](https://github.com/kimocoder/wifite2)
+-----
 
+### 8812au ( 8812au.ko ) :rocket:
 
-### Important!
-```
-* Use "ip" and "iw" instead of "ifconfig" and "iwconfig"
-     It's described further down, READ THE README!
+### Linux Driver for USB WiFi Adapters that use the RTL8812AU Chipset
 
-* v5.3.4 is the stable branch, not this, but this does have
-  better range then branches below + more fixes from Realtek
-```
+- v5.9.3.2 (Realtek) (2020-10-12)
+- Plus updates from the Linux community
 
-### IPERF3 benchmark
-<b>[Device]</b> Alfa Networks AWUS036ACH<br>
-<b>[Chipset]</b> 88XXau (rtl8812au)<br>
-<b>[Branch]</b> v5.6.4.1<br>
-<b>[Distance]</b> 10m free sight
-```
-[ ID] Interval           Transfer     Bitrate         Retr  Cwnd
-[  5]   0.00-1.00   sec  11.6 MBytes  97.4 Mbits/sec    0   96.2 KBytes
-[  5]   1.00-2.00   sec  11.2 MBytes  93.8 Mbits/sec    0    100 KBytes
-[  5]   2.00-3.00   sec  11.2 MBytes  93.8 Mbits/sec    0    100 KBytes
-[  5]   3.00-4.00   sec  11.2 MBytes  93.8 Mbits/sec    0    100 KBytes
-[  5]   4.00-5.00   sec  11.2 MBytes  93.8 Mbits/sec    0    100 KBytes
-[  5]   5.00-6.00   sec  11.4 MBytes  95.9 Mbits/sec    0    105 KBytes
-[  5]   6.00-7.00   sec  11.2 MBytes  93.8 Mbits/sec    0    105 KBytes
-[  5]   7.00-8.00   sec  11.3 MBytes  94.9 Mbits/sec    0    157 KBytes
-[  5]   8.00-9.00   sec  11.2 MBytes  93.8 Mbits/sec    0    157 KBytes
-[  5]   9.00-10.00  sec  11.2 MBytes  94.3 Mbits/sec    0    157 KBytes
-[  5]  10.00-11.00  sec  11.2 MBytes  93.8 Mbits/sec    0    157 KBytes
-[  5]  11.00-12.00  sec  11.2 MBytes  93.8 Mbits/sec    0    157 KBytes
-[  5]  12.00-13.00  sec  11.2 MBytes  94.4 Mbits/sec    0    157 KBytes
-[  5]  13.00-14.00  sec  11.2 MBytes  93.8 Mbits/sec    0    157 KBytes
-[  5]  14.00-15.00  sec  11.2 MBytes  94.4 Mbits/sec    0    157 KBytes
-[  5]  15.00-16.00  sec  10.9 MBytes  91.7 Mbits/sec    0    157 KBytes
-[  5]  16.00-17.00  sec  11.2 MBytes  94.4 Mbits/sec    0    157 KBytes
-[  5]  17.00-18.00  sec  11.2 MBytes  94.4 Mbits/sec    0    157 KBytes
-[  5]  18.00-19.00  sec  11.2 MBytes  94.4 Mbits/sec    0    157 KBytes
-[  5]  19.00-20.00  sec  11.2 MBytes  93.8 Mbits/sec    0    157 KBytes
-[  5]  20.00-21.00  sec  11.2 MBytes  93.8 Mbits/sec    0    157 KBytes
-[  5]  21.00-22.00  sec  11.2 MBytes  93.8 Mbits/sec    0    157 KBytes
-[  5]  22.00-23.00  sec  11.2 MBytes  93.8 Mbits/sec    0    157 KBytes
-- - - - - - - - - - - - - - - - - - - - - - - - -
-[ ID] Interval           Transfer     Bitrate         Retr
-[  5]   0.00-23.15  sec   260 MBytes  94.2 Mbits/sec    0             sender
-[  5]   0.00-23.15  sec  0.00 Bytes  0.00 bits/sec                  receiver
-```
+### Features
 
-### DKMS
-This driver can be installed using [DKMS]. This is a system which will automatically recompile and install a kernel module when a new kernel gets installed or updated. To make use of DKMS, install the `dkms` package, which on Debian (based) systems is done like this:
-```
-$ sudo apt-get install dkms
-```
+- IEEE 802.11 b/g/n/ac WiFi compliant
+- 802.1x, WEP, WPA TKIP and WPA2 AES/Mixed mode for PSK and TLS (Radius)
+- WPA3-SAE (Personal)
+- WPS - PIN and PBC Methods
+- IEEE 802.11b/g/n/ac Client mode
+  * Support wireless security for WEP, WPA TKIP and WPA2 AES PSK
+  * Support site survey scan and manual connect
+  * Support WPA/WPA2 TLS client
+  * Support power saving mode
+- Soft AP mode
+- WiFi-Direct
+- MU-MIMO
+- Mesh
+- Wake on WLAN
+- Supported interface modes:
+  * IBSS
+  * Managed
+  * AP (see Bridged_Wireless_Access_Point.md)
+  * Monitor (see Monitor_Mode.md)
+  * P2P-client
+  * P2P-GO
+- USB mode control
+- Log level control
+- LED control
+- Power saving control
+- VHT control (allows 80 MHz channel width in AP mode)
 
-### Installation of Driver
-In order to install the driver open a terminal in the directory with the source code and execute the following command:
-```
-$ sudo ./dkms-install.sh
-```
+### Compatible CPUs
 
-### Removal of Driver
-In order to remove the driver from your system open a terminal in the directory with the source code and execute the following command:
-```
-$ sudo ./dkms-remove.sh
-```
+- x86, amd64
+- ARM, ARM64
 
-### Make
-For building & installing the driver with 'make' use
-```
-$ make && make install
-```
+### Compatible Kernels
 
-### Notes
-Download
-```
-$ git clone -b v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git
-cd rtl*
-```
-Package / Build dependencies (Kali)
-```
-$ sudo apt-get update
-$ sudo apt-get install build-essential libelf-dev linux-headers-`uname -r`
-```
-#### For Raspberry (RPI)
+- Kernels: 2.6.24 - 5.8 (Realtek)
+- Kernels: 5.9 - 5.11
 
-```
-$ sudo apt-get install raspberrypi-kernel-headers
-```
+### Tested Linux Distributions
 
-Then run this step to change platform in Makefile, For RPI 1/2/3/ & 0/Zero:
-```
-$ sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
-$ sed -i 's/CONFIG_PLATFORM_ARM_RPI = n/CONFIG_PLATFORM_ARM_RPI = y/g' Makefile
-```
+- Arch Linux (kernel 5.4)
+- Arch Linux (kernel 5.9)
 
-But for RPI 3B+ & 4B you will need to run those below which builds the ARM64 arch driver:
+- Linux Mint 20.1 (Linux Mint based on Ubuntu) (kernel 5.4)
+- Linux Mint 20   (Linux Mint based on Ubuntu) (kernel 5.4)
+- Linux Mint 19.3 (Linux Mint based on Ubuntu) (kernel 5.4)
+
+- LMDE 4 (Linux Mint based on Debian) (kernel 4.19)
+
+- Manjaro 20.1 (kernel 5.9)
+
+- Raspberry Pi OS (2021-01-11) (ARM 32 bit) (kernel 5.4)
+
+- Ubuntu 20.10 (kernel 5.8)
+- Ubuntu 20.04 (kernel 5.4)
+- Ubuntu 18.04 (kernel 5.4)
+
+### Download Locations for Tested Linux Distributions
+
+- [Arch Linux](https://www.archlinux.org)
+- [Linux Mint](https://www.linuxmint.com)
+- [Manjaro](https://manjaro.org)
+- [Raspberry Pi OS](https://www.raspberrypi.org)
+- [Ubuntu](https://www.ubuntu.com)
+
+### Tested Hardware
+
+- [Alfa - AWUS036ACH](https://www.amazon.com/dp/B00VEEBOPG)
+
+### Compatible Devices
+
+Note: Some adapter makers change the chipsets in their products while keeping the same model number so please check to confirm that the product you plan to buy has the chipset you are expecting.
+
+* Alfa AWUS036AC
+* Alfa AWUS036ACH
+* Belkin F9L1109
+* Buffalo - WI-U3-866D
+* D-Link DWA-182 (Rev. C1)
+* Edimax EW-7822UAC
+* Linksys WUSB6300
+* Rosewill RNX-AC1200UBE
+* TRENDnet TEW-805UB
+* Numerous products that are based on the supported chipset.
+
+### Installation Information
+
+The installation instructions are for the novice user. Experienced users are welcome to alter the installation to meet their needs.
+
+Temporary internet access is required for installation. There are numerous ways to enable temporary internet access depending on your hardware and situation. [One method is to use tethering from a phone.](https://www.makeuseof.com/tag/how-to-tether-your-smartphone-in-linux)
+
+Another method to enable temporary internet access is to keep an [ultra cheap wifi adapter that uses an in-kernel driver](https://www.canakit.com/raspberry-pi-wifi.html) in your toolkit.
+
+You will need to use the terminal interface. The quick way to open a terminal: Ctrl+Alt+T (hold down on the Ctrl and Alt keys then press the T key)
+
+DKMS is used for the installation. DKMS is a system utility which will automatically recompile and install this driver when a new kernel is installed. DKMS is provided by and maintained by Dell.
+
+It is recommended that you do not delete the driver directory after installation as the directory contains information and scripts that you may need in the future.
+
+### Installation Steps
+
+Step 1: Open a terminal (Ctrl+Alt+T)
+
+Step 2: Update the system (select the option for the OS you are using)
 ```
-$ sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
-$ sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makefile
+    Option for Debian based distributions such as Ubuntu, Linux Mint and the Raspberry Pi OS
+    
+    $ sudo apt-get update
 ```
-
-In addition, if you receive an error message about `unrecognized command line option ‘-mgeneral-regs-only’` (i.e., Raspbian Buster), you will need to run the following commands:
 ```
-$ sed -i 's/^dkms build/ARCH=arm dkms build/' dkms-install.sh
-$ sed -i 's/^MAKE="/MAKE="ARCH=arm\ /' dkms.conf
+    Option for Arch based distributions such as Manjaro
+
+    $ sudo pacman -Syu
 ```
-
-For setting monitor mode
-  1. Fix problematic interference in monitor mode.
-  ```
-  $ airmon-ng check kill
-  ```
-  You may also uncheck the box "Automatically connect to this network when it is avaiable" in nm-connection-editor. This only works if you have a saved wifi connection.
-
-  2. Set interface down
-  ```
-  $ sudo ip link set wlan0 down
-  ```
-  3. Set monitor mode
-  ```
-  $ sudo iw dev wlan0 set type monitor
-  ```
-  4. Set interface up
-  ```
-  $ sudo ip link set wlan0 up
-  ```
-For setting TX power
+Step 3: Install the required packages (select the option for the OS you are using)
 ```
-$ sudo iw wlan0 set txpower fixed 3000
+    Option for Raspberry Pi OS
+
+    $ sudo apt-get install -y raspberrypi-kernel-headers bc build-essential dkms git
 ```
-
-### LED control
-
-#### statically by module parameter in /etc/modprobe.d/8812au.conf or wherever, for example:
-
-```sh
-options 88XXau rtw_led_ctrl=0
 ```
-value can be 0 or 1
+    Option for LMDE (Debian based)
 
-#### or dynamically by writing to /proc/net/rtl8812au/$(your interface name)/led_ctrl, for example:
-
-```sh
-$ echo "0" > /proc/net/rtl8812au/$(your interface name)/led_ctrl
+    $ sudo apt-get install -y linux-headers-$(uname -r) build-essential dkms git
 ```
-value can be 0 or 1
-
-#### check current value:
-
-```sh
-$ cat /proc/net/rtl8812au/$(your interface name)/led_ctrl
 ```
+    Option for Linux Mint or Ubuntu (all flavors)
 
-### USB Mode Switch
+    $ sudo apt-get install -y dkms git
+```
+```
+    Option for Arch based distributions such as Manjaro
 
-0: doesn't switch, 1: switch from usb2.0 to usb 3.0 2: switch from usb3.0 to usb 2.0
-```sh
-$ rmmod 88XXau
-$ modprobe 88XXau rtw_switch_usb_mode:int (0: no switch 1: switch from usb2 to usb3 2: switch from usb3 to usb2)
+    $ sudo pacman -S --noconfirm linux-headers dkms git
 ```
+Step 4: Create a directory to hold the downloaded driver
 
-### NetworkManager
+```bash
+$ mkdir src
+```
+Step 5: Move to the newly created directory
+```bash
+$ cd ~/src
+```
+Step 6: Download the driver
+```bash
+$ git clone https://github.com/morrownr/8812au.git
+```
+Step 7: Move to the newly created driver directory
+```bash
+$ cd ~/src/8812au
+```
+Step 8: Run a preparation script if required (Raspberry Pi *hardware* requires a preparation script)
+```
+    Option for 32 bit operating systems to be installed to Raspberry Pi hardware
 
-Newer versions of NetworkManager switches to random MAC address. Some users would prefer to use a fixed address.
-Simply add these lines below
+    $ sudo ./raspi32.sh
 ```
-[device]
-wifi.scan-rand-mac-address=no
 ```
-at the end of file /etc/NetworkManager/NetworkManager.conf and restart NetworkManager with the command:
+    Option for 64 bit operating systems to be installed to Raspberry Pi hardware
+
+    $ sudo ./raspi64.sh
 ```
-$ sudo service NetworkManager restart
+Step 9: Run the installation script
+```bash
+$ sudo ./install-driver.sh
+```
+Step 10: Reboot
+```bash
+$ sudo reboot
 ```
 
-### Credits / Contributors
+### Driver Options
 
+A file called `8812au.conf` will be installed in `/etc/modeprob.d` by default.
+
+`/etc/modprobe.d/8812au.conf`
+
+This file will be read and applied to the driver on each system boot.
+
+To edit the driver options file, run the `edit-options.sh` script.
+```bash
+$ sudo ./edit-options.sh
 ```
-Alfa Networks - https://www.alfa.com.tw/
-Realtek.      - https://www.realtek.com
-aircrack-ng   - https://www.aircrack-ng.org
+The driver options are as follows
 
-astsam        - https://github.com/astsam
-evilphish     - https://github.com/evilphish
-fariouche     - https://github.com/fariouche
-CGarces       - https://github.com/CGarces
-ZerBea        - https://github.com/ZerBea
-lwfinger      - https://github.com/lwfinger
-Ulli-Kroll.   - https://github.com/Ulli-Kroll
+ -----
 
+ Log level options ( rtw_drv_log_level )
 ```
+ 0 = NONE (default)
+ 1 = ALWAYS
+ 2 = ERROR
+ 3 = WARNING
+ 4 = INFO
+ 5 = DEBUG
+ 6 = MAX
+```
+ Note: You can save a log of RTW log entries by running the following in a terminal:
+
+ $ sudo ./save-log.sh
+
+ -----
+
+ LED control options ( rtw_led_ctrl )
+```
+ 0 = Always off
+ 1 = Normal blink (default)
+ 2 = Always on
+```
+ -----
+
+ VHT enable options ( rtw_vht_enable )
+```
+  0 = Disable
+  1 = Enable (default)
+  2 = Force auto enable (use caution)
+```
+ Notes:
+ - Unless you know what you are doing, don't change the default for rtw_vht_enable.
+ - A non-default setting can degrade performance greatly in some operational modes.
+ - For AP mode, such as when you are using Hostapd, setting this option to 2 will
+   allow 80 MHz channel width.
+
+ -----
+
+  Power saving options ( rtw_power_mgnt )
+```
+ 0 = Disable power saving
+ 1 = Power saving on, minPS (default)
+ 2 = Power saving on, maxPS
+```
+ Note: 0 may be useful in unattended server setups or if dropouts are experienced.
+
+ -----
+
+ USB mode options ( rtw_switch_usb_mode )
+```
+ 0 = No switch (default)
+ 1 = Switch from usb 2.0 to usb 3.0
+ 2 = Switch from usb 3.0 to usb 2.0
+```
+ Note: When changing USB options, a cold boot is recommended.
+
+ -----
+
+### Information about USB 3 support
+
+USB 3 support is off by default as there can be problems with older USB 3 ports, however, almost all USB 3 ports on modern systems work well so turning USB 3 support on should work fine for almost everyone and the difference in performance can be large.
+
+See what your USB mode is:
+
+```bash
+$ lsusb -t
+```
+```
+USB 2 =  480 Mb/s
+USB 3 = 5000 Mb/s
+```
+
+### iperf3 test results with USB 3 mode on
+```
+Bitrate
+-------------
+482 Mbits/sec
+472 Mbits/sec
+461 Mbits/sec
+472 Mbits/sec
+472 Mbits/sec
+482 Mbits/sec
+481 Mbits/sec
+462 Mbits/sec
+482 Mbits/sec
+```
+### Removal of the Driver
+
+Step 1: Open a terminal (Ctrl+Alt+T)
+
+Step 2: Move to the driver directory
+```bash
+$ cd ~/src/8812au
+```
+Step 3: Run the removal script
+```bash
+$ sudo ./remove-driver.sh
+```
+Step 4: Reboot
+```bash
+$ sudo reboot
+```
+### Recommended Router Settings for WiFi
+
+Note: These are general recommendations based on years of experience but may not apply to your situation so testing to see if any help fix your problem is recommended.
+
+Security: Use WPA2-AES. Do not use WPA or WPA2 mixed mode or TKIP.
+
+Channel Width for 2.4G: Use 20 MHz fixed width. Do not use 40 MHz or 20/40 automatic.
+
+Channel width for 5G: Using a 40 MHz fixed width may help in some situations.
+
+Channels for 2.4G: Use 1 or 6 or 11. Do not use automatic channel selection.
+
+Mode for 2.4G: Use G/N or B/G/N. Do not use N only.
+
+Network names: Do not set the 2.4G Network and the 5G Network to the same name. Note: Many routers come with both networks set to the same name.
+
+Power Saving: Set to off. This can help in some situations. If you try turning it off and you see no improvement then set it back to on so as to save electricity.
+
+After making these changes, reboot the router.
+
+
+### Set regulatory domain to correct setting in OS
+
+Check the current setting
+```bash
+$ sudo iw reg get
+```
+
+If you get 00, that is the default and may not provide optimal performance.
+
+Find the correct setting here: http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2
+
+Set it temporarily
+```bash
+$ sudo iw reg set US
+```
+Note: Substitute your country code if you are not in the United States.
+
+Set it permanently
+```bash
+$ sudo nano /etc/default/crda
+
+Change the last line to read:
+
+REGDOMAIN=US
+```
+
+### Recommendations regarding USB
+
+- If connecting your USB WiFi adapter to a desktop computer, use the USB ports on the rear of the computer. Why? The ports on the rear are directly connected to the motherboard which will reduce problems with interference and disconnection that can happen with front ports that use cables.
+
+- If your USB WiFi adapter is USB 3 capable then you need to plug it into a USB 3 port.
+
+- If you use an extension cable and your adapter is USB 3 capable, the cable needs to be USB 3 capable.
+
+- Some USB WiFi adapters require considerable electrical current and push the capabilities of the power available via USB port. One example is devices that use the Realtek 8814au chipset. Using a powered multiport USB extension can be a good idea in cases like this.
+
+
+### How to disable onboard WiFi on Raspberry Pi 3B, 3B+, 3A+, 4B and Zero W.
+
+Add the following line to /boot/config.txt
+```
+dtoverlay=disable-wifi
+```
+
+### How to forget a saved WiFi network on a Raspberry Pi
+
+1. Edit wpa_supplicant.conf
+```bash
+$ sudo nano /etc/wpa_supplicant/wpa_supplicant.conf
+```
+2. Delete the relevant WiFi network block (including the 'network=' and opening/closing braces.
+
+3. Press ctrl-x followed by 'y' and enter to save the file.
+
+4. Reboot
+

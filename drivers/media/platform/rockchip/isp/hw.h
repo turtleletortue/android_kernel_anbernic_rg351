@@ -44,7 +44,6 @@ struct rkisp_hw_dev {
 	/* lock for multi dev */
 	struct mutex dev_lock;
 	spinlock_t rdbk_lock;
-	atomic_t power_cnt;
 	atomic_t refcnt;
 
 	/* share buf for multi dev */
@@ -53,11 +52,19 @@ struct rkisp_hw_dev {
 	struct rkisp_ispp_buf *cur_buf;
 	struct rkisp_ispp_buf *nxt_buf;
 	struct list_head list;
-
+	struct list_head rpt_list;
+	struct rkisp_dummy_buffer dummy_buf;
+	const struct vb2_mem_ops *mem_ops;
+	bool is_dma_contig;
+	bool is_mmu;
 	bool is_idle;
 	bool is_single;
 	bool is_mi_update;
 	bool is_thunderboot;
+
+	bool is_feature_on;
+	u64 iq_feature;
+	bool is_buf_init;
 };
 
 int rkisp_register_irq(struct rkisp_hw_dev *dev);

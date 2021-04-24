@@ -791,7 +791,7 @@ static void rk817_charge_set_chrg_param(struct rk817_charger *charge,
 		charge->ac_in = 0;
 		if (charge->dc_in == 0) {
 			charge->prop_status = POWER_SUPPLY_STATUS_DISCHARGING;
-			rk817_charge_set_input_current(charge, INPUT_450MA);
+			rk817_charge_set_input_current(charge, INPUT_1500MA);
 		}
 		power_supply_changed(charge->usb_psy);
 		power_supply_changed(charge->ac_psy);
@@ -801,7 +801,7 @@ static void rk817_charge_set_chrg_param(struct rk817_charger *charge,
 		charge->ac_in = 0;
 		charge->prop_status = POWER_SUPPLY_STATUS_CHARGING;
 		if (charge->dc_in == 0)
-			rk817_charge_set_input_current(charge, INPUT_450MA);
+			rk817_charge_set_input_current(charge, INPUT_1500MA);
 		power_supply_changed(charge->usb_psy);
 		power_supply_changed(charge->ac_psy);
 		break;
@@ -833,9 +833,9 @@ static void rk817_charge_set_chrg_param(struct rk817_charger *charge,
 			charge->ac_in = 0;
 			charge->usb_in = 0;
 			charge->prop_status = POWER_SUPPLY_STATUS_DISCHARGING;
-			rk817_charge_set_input_current(charge, INPUT_450MA);
+			rk817_charge_set_input_current(charge, INPUT_1500MA);
 		} else if (charge->usb_in) {
-			rk817_charge_set_input_current(charge, INPUT_450MA);
+			rk817_charge_set_input_current(charge, INPUT_1500MA);
 			charge->prop_status = POWER_SUPPLY_STATUS_CHARGING;
 		}
 		power_supply_changed(charge->usb_psy);
@@ -843,7 +843,7 @@ static void rk817_charge_set_chrg_param(struct rk817_charger *charge,
 		break;
 	default:
 		charge->prop_status = POWER_SUPPLY_STATUS_DISCHARGING;
-		rk817_charge_set_input_current(charge, INPUT_450MA);
+		rk817_charge_set_input_current(charge, INPUT_1500MA);
 		break;
 	}
 

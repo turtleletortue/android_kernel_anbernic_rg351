@@ -32,6 +32,15 @@
 
 #define GET_NEXT_SEQ(seq) (((seq) +1) & 0x0fff)
 
+#define CHAN2G(_channel, _freq, _flags) {   \
+	.band           = NL80211_BAND_2GHZ,  \
+	.hw_value       = (_channel),           \
+	.center_freq    = (_freq),              \
+	.flags          = (_flags),             \
+	.max_antenna_gain   = 0,                \
+	.max_power      = 30,                   \
+}
+
 extern void reset_signal_count(void);
 
 
@@ -1395,9 +1404,7 @@ struct esp_pub *esp_pub_alloc_mac80211(struct device *dev)
                 esp_dbg(ESP_DBG_ERROR, "ieee80211 can't alloc hw!\n");
                 return ERR_PTR(-ENOMEM);
         }
-
-	/* FIXME: useless if hw_scan is defined, incorrect if hw_scan is undefined*/
-#ifdef HW_SCAN
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
         hw->wiphy->flags |= WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL;
 #endif
 
@@ -1461,87 +1468,48 @@ int esp_pub_dealloc_mac80211(struct esp_pub *epub)
 
 /* 2G band channels */
 static struct ieee80211_channel esp_channels_2ghz[] = {
-        { .hw_value = 1, .center_freq = 2412, .max_power = 25 },
-        { .hw_value = 2, .center_freq = 2417, .max_power = 25 },
-        { .hw_value = 3, .center_freq = 2422, .max_power = 25 },
-        { .hw_value = 4, .center_freq = 2427, .max_power = 25 },
-        { .hw_value = 5, .center_freq = 2432, .max_power = 25 },
-        { .hw_value = 6, .center_freq = 2437, .max_power = 25 },
-        { .hw_value = 7, .center_freq = 2442, .max_power = 25 },
-        { .hw_value = 8, .center_freq = 2447, .max_power = 25 },
-        { .hw_value = 9, .center_freq = 2452, .max_power = 25 },
-        { .hw_value = 10, .center_freq = 2457, .max_power = 25 },
-        { .hw_value = 11, .center_freq = 2462, .max_power = 25 },
-        { .hw_value = 12, .center_freq = 2467, .max_power = 25 },
-        { .hw_value = 13, .center_freq = 2472, .max_power = 25 },
-        { .hw_value = 14, .center_freq = 2484, .max_power = 25 },
+	CHAN2G(1, 2412, 0),
+	CHAN2G(2, 2417, 0),
+	CHAN2G(3, 2422, 0),
+	CHAN2G(4, 2427, 0),
+	CHAN2G(5, 2432, 0),
+	CHAN2G(6, 2437, 0),
+	CHAN2G(7, 2442, 0),
+	CHAN2G(8, 2447, 0),
+	CHAN2G(9, 2452, 0),
+	CHAN2G(10, 2457, 0),
+	CHAN2G(11, 2462, 0),
+	CHAN2G(12, 2467, 0),
+	CHAN2G(13, 2472, 0),
+	CHAN2G(14, 2484, 0),
 };
 
-/* 11G rate */
+#define CCK_RATE(_idx, _rate) {					\
+	.bitrate = _rate,					\
+	.flags = IEEE80211_RATE_SHORT_PREAMBLE,			\
+	.hw_value = (PHY_TYPE_CCK << 8) | _idx,		\
+	.hw_value_short = (PHY_TYPE_CCK << 8) | (8 + _idx),	\
+}
+
+#define OFDM_RATE(_idx, _rate) {				\
+	.bitrate = _rate,					\
+	.hw_value = (PHY_TYPE_OFDM << 8) | _idx,		\
+	.hw_value_short = (PHY_TYPE_OFDM << 8) | _idx,	\
+}
+
 static struct ieee80211_rate esp_rates_2ghz[] = {
-        {
-                .bitrate = 10,
-                .hw_value = CONF_HW_BIT_RATE_1MBPS,
-                .hw_value_short = CONF_HW_BIT_RATE_1MBPS,
-        },
-        {
-                .bitrate = 20,
-                .hw_value = CONF_HW_BIT_RATE_2MBPS,
-                .hw_value_short = CONF_HW_BIT_RATE_2MBPS,
-                .flags = IEEE80211_RATE_SHORT_PREAMBLE
-        },
-        {
-                .bitrate = 55,
-                .hw_value = CONF_HW_BIT_RATE_5_5MBPS,
-                .hw_value_short = CONF_HW_BIT_RATE_5_5MBPS,
-                .flags = IEEE80211_RATE_SHORT_PREAMBLE
-        },
-        {
-                .bitrate = 110,
-                .hw_value = CONF_HW_BIT_RATE_11MBPS,
-                .hw_value_short = CONF_HW_BIT_RATE_11MBPS,
-                .flags = IEEE80211_RATE_SHORT_PREAMBLE
-        },
-        {
-                .bitrate = 60,
-                .hw_value = CONF_HW_BIT_RATE_6MBPS,
-                .hw_value_short = CONF_HW_BIT_RATE_6MBPS,
-        },
-        {
-                .bitrate = 90,
-                .hw_value = CONF_HW_BIT_RATE_9MBPS,
-                .hw_value_short = CONF_HW_BIT_RATE_9MBPS,
-        },
-        {
-                .bitrate = 120,
-                .hw_value = CONF_HW_BIT_RATE_12MBPS,
-                .hw_value_short = CONF_HW_BIT_RATE_12MBPS,
-        },
-        {
-                .bitrate = 180,
-                .hw_value = CONF_HW_BIT_RATE_18MBPS,
-                .hw_value_short = CONF_HW_BIT_RATE_18MBPS,
-        },
-        {
-                .bitrate = 240,
-                .hw_value = CONF_HW_BIT_RATE_24MBPS,
-                .hw_value_short = CONF_HW_BIT_RATE_24MBPS,
-        },
-        {
-                .bitrate = 360,
-                .hw_value = CONF_HW_BIT_RATE_36MBPS,
-                .hw_value_short = CONF_HW_BIT_RATE_36MBPS,
-        },
-        {
-                .bitrate = 480,
-                .hw_value = CONF_HW_BIT_RATE_48MBPS,
-                .hw_value_short = CONF_HW_BIT_RATE_48MBPS,
-        },
-        {
-                .bitrate = 540,
-                .hw_value = CONF_HW_BIT_RATE_54MBPS,
-                .hw_value_short = CONF_HW_BIT_RATE_54MBPS,
-        },
+	CCK_RATE(0, 10),
+	CCK_RATE(1, 20),
+	CCK_RATE(2, 55),
+	CCK_RATE(3, 110),
+	OFDM_RATE(0, 60),
+	OFDM_RATE(1, 90),
+	OFDM_RATE(2, 120),
+	OFDM_RATE(3, 180),
+	OFDM_RATE(4, 240),
+	OFDM_RATE(5, 360),
+	OFDM_RATE(6, 480),
+	OFDM_RATE(7, 540),
 };
 
 static struct ieee80211_sta_ht_cap esp_ht_cap_2ghz = {
@@ -1555,9 +1523,38 @@ static struct ieee80211_sta_ht_cap esp_ht_cap_2ghz = {
 	},
 };
 
+static const struct ieee80211_iface_limit esp_iface_limits[] = {
+	{
+		.max = 2,
+		.types = BIT(NL80211_IFTYPE_STATION),
+	},
+	{
+		.max = 2,
+		.types = BIT(NL80211_IFTYPE_AP) |
+			BIT(NL80211_IFTYPE_P2P_CLIENT) |
+			BIT(NL80211_IFTYPE_P2P_GO),
+	},
+	{
+		.max = 1,
+		.types = BIT(NL80211_IFTYPE_P2P_DEVICE),
+	},
+};
+
+static const struct ieee80211_iface_combination esp_iface_combinations[] = {
+	{
+		.num_different_channels = 1,
+		.max_interfaces = 3,
+		.limits = esp_iface_limits,
+		.n_limits = ARRAY_SIZE(esp_iface_limits),
+	},
+};
+
+
+
 static void esp_pub_init_mac80211(struct esp_pub *epub)
 {
 	struct ieee80211_hw *hw = epub->hw;
+	struct wiphy *wiphy = NULL;
 	struct ieee80211_supported_band *sbands =
 		&epub->wl.sbands[NL80211_BAND_2GHZ];
 
@@ -1567,7 +1564,7 @@ static void esp_pub_init_mac80211(struct esp_pub *epub)
 		WLAN_CIPHER_SUITE_TKIP,
 		WLAN_CIPHER_SUITE_CCMP,
 	};
-
+	wiphy = hw->wiphy;
 	hw->max_listen_interval = 10;
 
 	ieee80211_hw_set(hw, SIGNAL_DBM);
@@ -1578,19 +1575,23 @@ static void esp_pub_init_mac80211(struct esp_pub *epub)
 	hw->max_rx_aggregation_subframes = IEEE80211_MAX_AMPDU_BUF;
 	hw->max_tx_aggregation_subframes = IEEE80211_MAX_AMPDU_BUF;
 
-	hw->wiphy->cipher_suites = cipher_suites;
-	hw->wiphy->n_cipher_suites = ARRAY_SIZE(cipher_suites);
-	hw->wiphy->max_scan_ie_len = epub->sip->tx_blksz -
+	wiphy->cipher_suites = cipher_suites;
+	wiphy->n_cipher_suites = ARRAY_SIZE(cipher_suites);
+	wiphy->max_scan_ie_len = epub->sip->tx_blksz -
 		sizeof(struct sip_hdr) - sizeof(struct sip_cmd_scan);
 
 	/* ONLY station for now, support P2P soon... */
 	/* FIXME: is p2p really supported? */
-	hw->wiphy->interface_modes = BIT(NL80211_IFTYPE_P2P_GO) |
-		BIT(NL80211_IFTYPE_P2P_CLIENT) | BIT(NL80211_IFTYPE_STATION) |
-		BIT(NL80211_IFTYPE_AP);
+	wiphy->interface_modes = 	BIT(NL80211_IFTYPE_P2P_GO)	|
+					BIT(NL80211_IFTYPE_P2P_CLIENT) |
+					BIT(NL80211_IFTYPE_P2P_DEVICE) |					
+					BIT(NL80211_IFTYPE_STATION)	|
+					BIT(NL80211_IFTYPE_AP);
 
-	hw->wiphy->max_scan_ssids = 2;
-	hw->wiphy->max_remain_on_channel_duration = 5000;
+	wiphy->max_scan_ssids = 2;
+	wiphy->max_remain_on_channel_duration = 5000;
+	wiphy->iface_combinations = esp_iface_combinations;
+	wiphy->n_iface_combinations = ARRAY_SIZE(esp_iface_combinations);
 
 	atomic_set(&epub->wl.off, 1);
 
@@ -1601,10 +1602,10 @@ static void esp_pub_init_mac80211(struct esp_pub *epub)
 	sbands->n_bitrates = ARRAY_SIZE(esp_rates_2ghz);
 	sbands->ht_cap = esp_ht_cap_2ghz;
 
-	hw->wiphy->bands[NL80211_BAND_2GHZ] = sbands;
+	wiphy->bands[NL80211_BAND_2GHZ] = sbands;
 
 	/*no fragment */
-	hw->wiphy->frag_threshold = IEEE80211_MAX_FRAG_THRESHOLD;
+	wiphy->frag_threshold = IEEE80211_MAX_FRAG_THRESHOLD;
 
 	/* handle AC queue in f/w */
 	hw->queues = 4;
@@ -1617,27 +1618,26 @@ static void esp_pub_init_mac80211(struct esp_pub *epub)
 int esp_register_mac80211(struct esp_pub *epub)
 {
         int ret;
-#ifdef P2P_CONCURRENT
 	u8 *wlan_addr;
 	u8 *p2p_addr;
 	int idx;
-#endif
 
         esp_pub_init_mac80211(epub);
 
+
 #ifdef P2P_CONCURRENT
 	epub->hw->wiphy->addresses = (struct mac_address *)esp_mac_addr;
-	memcpy(&epub->hw->wiphy->addresses[0].addr, epub->mac_addr, ETH_ALEN);
-	memcpy(&epub->hw->wiphy->addresses[1].addr, epub->mac_addr, ETH_ALEN);
-	wlan_addr = epub->hw->wiphy->addresses[0].addr;
-	p2p_addr  = epub->hw->wiphy->addresses[1].addr;
+	memcpy(&epub->hw->wiphy->addresses[0], epub->mac_addr, ETH_ALEN);
+	memcpy(&epub->hw->wiphy->addresses[1], epub->mac_addr, ETH_ALEN);
+	wlan_addr = (u8 *)&epub->hw->wiphy->addresses[0];
+	p2p_addr  = (u8 *)&epub->hw->wiphy->addresses[1];
 
-	for (idx = 0; idx < 8 * ETH_ALEN; idx++) {
-		p2p_addr[0] = epub->mac_addr[0] | 0x02;
-		p2p_addr[0] ^= idx << 2;
-		if (strncmp(p2p_addr, epub->mac_addr, 6))
-			break;
-	}
+	for (idx = 0; idx < 64; idx++) {
+                p2p_addr[0] = wlan_addr[0] | 0x02;
+                p2p_addr[0] ^= idx << 2;
+                if (strncmp(p2p_addr, wlan_addr, 6) != 0)
+                        break;
+        }
 
 	epub->hw->wiphy->n_addresses = 2;
 #else
@@ -1646,30 +1646,11 @@ int esp_register_mac80211(struct esp_pub *epub)
 #endif
 
         ret = ieee80211_register_hw(epub->hw);
- 
+
         if (ret < 0) {
                 printk("unable to register mac80211 hw: %d\n", ret);
                 return ret;
-        } else {
-#ifdef MAC80211_NO_CHANGE
-        	rtnl_lock();
-
-
-if (epub->hw->wiphy->interface_modes &
-                (BIT(NL80211_IFTYPE_P2P_GO) | BIT(NL80211_IFTYPE_P2P_CLIENT))) {
-                struct vif_params params = {0};        	
-        
-                ret = ieee80211_if_add(hw_to_local(epub->hw), "p2p%d", NET_NAME_ENUM, NULL,
-                                          NL80211_IFTYPE_STATION, &params);
-                if (ret)
-                        wiphy_warn(epub->hw->wiphy,
-                                   "Failed to add default virtual iface\n");
-        	}
-
-        	rtnl_unlock();
-#endif
-	}
-
+}
         set_bit(ESP_WL_FLAG_HW_REGISTERED, &epub->wl.flags);
 
         return ret;
@@ -1679,13 +1660,12 @@ static u8 getaddr_index(u8 *addr, struct esp_pub *epub)
 {
 #ifdef P2P_CONCURRENT
 	int i;
-	
 	for(i = 0; i < ESP_PUB_MAX_VIF; i++)
 		if (!memcmp(addr, epub->hw->wiphy->addresses[i].addr, ETH_ALEN))
                 	return i;
-                	
 	return ESP_PUB_MAX_VIF;
 #else
 	return 0;
 #endif
 }
+

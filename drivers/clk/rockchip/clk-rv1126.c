@@ -14,6 +14,7 @@
 #define RV1126_GMAC_CON			0x460
 #define RV1126_GRF_IOFUNC_CON1		0x10264
 #define RV1126_GRF_SOC_STATUS0		0x10
+#define RV1126_PMUGRF_SOC_CON0		0x100
 
 #define RV1126_FRAC_MAX_PRATE		1200000000
 #define RV1126_CSIOUT_FRAC_MAX_PRATE	300000000
@@ -73,6 +74,8 @@ static struct rockchip_pll_rate_table rv1126_pll_rates[] = {
 	RK3036_PLL_RATE(594000000, 1, 99, 4, 1, 1, 0),
 	RK3036_PLL_RATE(504000000, 1, 84, 4, 1, 1, 0),
 	RK3036_PLL_RATE(500000000, 1, 125, 6, 1, 1, 0),
+	RK3036_PLL_RATE(496742400, 1, 124, 6, 1, 0, 3113851),
+	RK3036_PLL_RATE(491520000, 1, 40, 2, 1, 0, 16106127),
 	RK3036_PLL_RATE(408000000, 1, 68, 2, 2, 1, 0),
 	RK3036_PLL_RATE(312000000, 1, 78, 6, 1, 1, 0),
 	RK3036_PLL_RATE(216000000, 1, 72, 4, 2, 1, 0),
@@ -145,6 +148,7 @@ static const struct rockchip_cpuclk_reg_data rv1126_cpuclk_data = {
 
 PNAME(mux_pll_p)			= { "xin24m" };
 PNAME(mux_rtc32k_p)			= { "clk_pmupvtm_divout", "xin32k", "clk_osc0_div32k" };
+PNAME(mux_clk_32k_ioe_p)		= { "xin32k", "clk_rtc32k" };
 PNAME(mux_wifi_p)			= { "clk_wifi_osc0", "clk_wifi_div" };
 PNAME(mux_uart1_p)			= { "sclk_uart1_div", "sclk_uart1_fracdiv", "xin24m" };
 PNAME(mux_xin24m_gpll_p)		= { "xin24m", "gpll" };
@@ -349,6 +353,9 @@ static struct rockchip_clk_branch rv1126_clk_pmu_branches[] __initdata = {
 			RV1126_PMU_CLKSEL_CON(13), 0,
 			RV1126_PMU_CLKGATE_CON(2), 9, GFLAGS,
 			&rv1126_rtc32k_fracmux, 0),
+
+	MUXPMUGRF(CLK_32K_IOE, "clk_32k_ioe", mux_clk_32k_ioe_p,  0,
+			RV1126_PMUGRF_SOC_CON0, 0, 1, MFLAGS),
 
 	COMPOSITE_NOMUX(CLK_WIFI_DIV, "clk_wifi_div", "gpll", 0,
 			RV1126_PMU_CLKSEL_CON(12), 0, 6, DFLAGS,
@@ -744,10 +751,10 @@ static struct rockchip_clk_branch rv1126_clk_branches[] __initdata = {
 			&rv1126_i2s0_rx_fracmux, RV1126_FRAC_MAX_PRATE),
 	GATE(MCLK_I2S0_RX, "mclk_i2s0_rx", "mclk_i2s0_rx_mux", 0,
 			RV1126_CLKGATE_CON(9), 10, GFLAGS),
-	COMPOSITE_NODIV(MCLK_I2S0_TX_OUT2IO, "mclk_i2s0_tx_out2io", mux_i2s0_tx_out2io_p, 0,
+	COMPOSITE_NODIV(MCLK_I2S0_TX_OUT2IO, "mclk_i2s0_tx_out2io", mux_i2s0_tx_out2io_p, CLK_SET_RATE_PARENT,
 			RV1126_CLKSEL_CON(30), 6, 1, MFLAGS,
 			RV1126_CLKGATE_CON(9), 13, GFLAGS),
-	COMPOSITE_NODIV(MCLK_I2S0_RX_OUT2IO, "mclk_i2s0_rx_out2io", mux_i2s0_rx_out2io_p, 0,
+	COMPOSITE_NODIV(MCLK_I2S0_RX_OUT2IO, "mclk_i2s0_rx_out2io", mux_i2s0_rx_out2io_p, CLK_SET_RATE_PARENT,
 			RV1126_CLKSEL_CON(30), 8, 1, MFLAGS,
 			RV1126_CLKGATE_CON(9), 14, GFLAGS),
 
@@ -762,7 +769,7 @@ static struct rockchip_clk_branch rv1126_clk_branches[] __initdata = {
 			&rv1126_i2s1_fracmux, RV1126_FRAC_MAX_PRATE),
 	GATE(MCLK_I2S1, "mclk_i2s1", "mclk_i2s1_mux", 0,
 			RV1126_CLKGATE_CON(10), 3, GFLAGS),
-	COMPOSITE_NODIV(MCLK_I2S1_OUT2IO, "mclk_i2s1_out2io", mux_i2s1_out2io_p, 0,
+	COMPOSITE_NODIV(MCLK_I2S1_OUT2IO, "mclk_i2s1_out2io", mux_i2s1_out2io_p, CLK_SET_RATE_PARENT,
 			RV1126_CLKSEL_CON(31), 12, 1, MFLAGS,
 			RV1126_CLKGATE_CON(10), 4, GFLAGS),
 	GATE(HCLK_I2S2, "hclk_i2s2", "hclk_pdaudio", 0,
@@ -776,7 +783,7 @@ static struct rockchip_clk_branch rv1126_clk_branches[] __initdata = {
 			&rv1126_i2s2_fracmux, RV1126_FRAC_MAX_PRATE),
 	GATE(MCLK_I2S2, "mclk_i2s2", "mclk_i2s2_mux", 0,
 			RV1126_CLKGATE_CON(10), 8, GFLAGS),
-	COMPOSITE_NODIV(MCLK_I2S2_OUT2IO, "mclk_i2s2_out2io", mux_i2s2_out2io_p, 0,
+	COMPOSITE_NODIV(MCLK_I2S2_OUT2IO, "mclk_i2s2_out2io", mux_i2s2_out2io_p, CLK_SET_RATE_PARENT,
 			RV1126_CLKSEL_CON(33), 10, 1, MFLAGS,
 			RV1126_CLKGATE_CON(10), 9, GFLAGS),
 

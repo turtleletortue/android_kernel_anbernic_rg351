@@ -373,7 +373,6 @@ alternative_insn eret, nop, ARM64_UNMAP_KERNEL_AT_EL0
 	.else
 	eret
 	.endif
-	sb
 	.endm
 
 	.macro	irq_stack_entry
@@ -1017,7 +1016,6 @@ alternative_insn isb, nop, ARM64_WORKAROUND_QCOM_FALKOR_E1003
 	mrs	x30, far_el1
 	.endif
 	eret
-	sb
 	.endm
 
 	.align	11

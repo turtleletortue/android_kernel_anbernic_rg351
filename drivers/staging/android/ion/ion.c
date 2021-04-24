@@ -202,7 +202,8 @@ static struct sg_table *dup_sg_table(struct sg_table *table)
 	new_sg = new_table->sgl;
 	for_each_sg(table->sgl, sg, table->nents, i) {
 		memcpy(new_sg, sg, sizeof(*sg));
-		new_sg->dma_address = 0;
+		sg_dma_address(new_sg) = 0;
+		sg_dma_len(new_sg) = 0;
 		new_sg = sg_next(new_sg);
 	}
 
@@ -219,6 +220,7 @@ struct ion_dma_buf_attachment {
 	struct device *dev;
 	struct sg_table *table;
 	struct list_head list;
+	bool mapped:1;
 };
 
 static int ion_dma_buf_attach(struct dma_buf *dmabuf,
@@ -241,6 +243,7 @@ static int ion_dma_buf_attach(struct dma_buf *dmabuf,
 	a->table = table;
 	a->dev = attachment->dev;
 	INIT_LIST_HEAD(&a->list);
+	a->mapped = false;
 
 	attachment->priv = a;
 
@@ -277,6 +280,8 @@ static struct sg_table *ion_map_dma_buf(struct dma_buf_attachment *attachment,
 			direction))
 		return ERR_PTR(-ENOMEM);
 
+	a->mapped = true;
+
 	return table;
 }
 
@@ -284,6 +289,10 @@ static void ion_unmap_dma_buf(struct dma_buf_attachment *attachment,
 			      struct sg_table *table,
 			      enum dma_data_direction direction)
 {
+	struct ion_dma_buf_attachment *a = attachment->priv;
+
+	a->mapped = false;
+
 	dma_unmap_sg(attachment->dev, table->sgl, table->nents, direction);
 }
 
@@ -318,18 +327,59 @@ static void ion_dma_buf_release(struct dma_buf *dmabuf)
 	struct ion_buffer *buffer = dmabuf->priv;
 
 	_ion_buffer_destroy(buffer);
+	kfree(dmabuf->exp_name);
+}
+
+static void *ion_dma_buf_vmap(struct dma_buf *dmabuf)
+{
+	struct ion_buffer *buffer = dmabuf->priv;
+	void *vaddr = ERR_PTR(-EINVAL);
+
+	if (buffer->heap->ops->map_kernel) {
+		mutex_lock(&buffer->lock);
+		vaddr = ion_buffer_kmap_get(buffer);
+		mutex_unlock(&buffer->lock);
+	} else {
+		pr_warn_ratelimited("heap %s doesn't support map_kernel\n",
+				    buffer->heap->name);
+	}
+
+	return vaddr;
+}
+
+static void ion_dma_buf_vunmap(struct dma_buf *dmabuf, void *vaddr)
+{
+	struct ion_buffer *buffer = dmabuf->priv;
+
+	if (buffer->heap->ops->map_kernel) {
+		mutex_lock(&buffer->lock);
+		ion_buffer_kmap_put(buffer);
+		mutex_unlock(&buffer->lock);
+	}
 }
 
 static void *ion_dma_buf_kmap(struct dma_buf *dmabuf, unsigned long offset)
 {
-	struct ion_buffer *buffer = dmabuf->priv;
+	/*
+	 * TODO: Once clients remove their hacks where they assume kmap(ed)
+	 * addresses are virtually contiguous implement this properly
+	 */
+	void *vaddr = ion_dma_buf_vmap(dmabuf);
 
-	return buffer->vaddr + offset * PAGE_SIZE;
+	if (IS_ERR(vaddr))
+		return vaddr;
+
+	return vaddr + offset * PAGE_SIZE;
 }
 
 static void ion_dma_buf_kunmap(struct dma_buf *dmabuf, unsigned long offset,
 			       void *ptr)
 {
+	/*
+	 * TODO: Once clients remove their hacks where they assume kmap(ed)
+	 * addresses are virtually contiguous implement this properly
+	 */
+	ion_dma_buf_vunmap(dmabuf, ptr);
 }
 
 static int ion_dma_buf_begin_cpu_access(struct dma_buf *dmabuf,
@@ -355,6 +405,8 @@ static int ion_dma_buf_begin_cpu_access(struct dma_buf *dmabuf,
 
 	mutex_lock(&buffer->lock);
 	list_for_each_entry(a, &buffer->attachments, list) {
+		if (!a->mapped)
+			continue;
 		dma_sync_sg_for_cpu(a->dev, a->table->sgl, a->table->nents,
 				    direction);
 	}
@@ -378,6 +430,8 @@ static int ion_dma_buf_end_cpu_access(struct dma_buf *dmabuf,
 
 	mutex_lock(&buffer->lock);
 	list_for_each_entry(a, &buffer->attachments, list) {
+		if (!a->mapped)
+			continue;
 		dma_sync_sg_for_device(a->dev, a->table->sgl, a->table->nents,
 				       direction);
 	}
@@ -397,6 +451,8 @@ static const struct dma_buf_ops dma_buf_ops = {
 	.end_cpu_access = ion_dma_buf_end_cpu_access,
 	.map = ion_dma_buf_kmap,
 	.unmap = ion_dma_buf_kunmap,
+	.vmap = ion_dma_buf_vmap,
+	.vunmap = ion_dma_buf_vunmap,
 };
 
 int ion_alloc(size_t len, unsigned int heap_id_mask, unsigned int flags)
@@ -407,6 +463,7 @@ int ion_alloc(size_t len, unsigned int heap_id_mask, unsigned int flags)
 	DEFINE_DMA_BUF_EXPORT_INFO(exp_info);
 	int fd;
 	struct dma_buf *dmabuf;
+	char task_comm[TASK_COMM_LEN];
 
 	pr_debug("%s: len %zu heap_id_mask %u flags %x\n", __func__,
 		 len, heap_id_mask, flags);
@@ -438,14 +495,19 @@ int ion_alloc(size_t len, unsigned int heap_id_mask, unsigned int flags)
 	if (IS_ERR(buffer))
 		return PTR_ERR(buffer);
 
+	get_task_comm(task_comm, current->group_leader);
+
 	exp_info.ops = &dma_buf_ops;
 	exp_info.size = buffer->size;
 	exp_info.flags = O_RDWR;
 	exp_info.priv = buffer;
+	exp_info.exp_name = kasprintf(GFP_KERNEL, "%s-%s-%d-%s", KBUILD_MODNAME,
+				      heap->name, current->tgid, task_comm);
 
 	dmabuf = dma_buf_export(&exp_info);
 	if (IS_ERR(dmabuf)) {
 		_ion_buffer_destroy(buffer);
+		kfree(exp_info.exp_name);
 		return PTR_ERR(dmabuf);
 	}
 
@@ -507,6 +569,28 @@ static const struct file_operations ion_fops = {
 #ifdef CONFIG_COMPAT
 	.compat_ioctl	= ion_ioctl,
 #endif
+};
+
+static int ion_debug_heap_show(struct seq_file *s, void *unused)
+{
+	struct ion_heap *heap = s->private;
+
+	if (heap->debug_show)
+		heap->debug_show(heap, s, unused);
+
+	return 0;
+}
+
+static int ion_debug_heap_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, ion_debug_heap_show, inode->i_private);
+}
+
+static const struct file_operations debug_heap_fops = {
+	.open = ion_debug_heap_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
 };
 
 static int debug_shrink_set(void *data, u64 val)
@@ -581,6 +665,14 @@ void ion_device_add_heap(struct ion_heap *heap)
 		snprintf(debug_name, 64, "%s_shrink", heap->name);
 		debugfs_create_file(debug_name, 0644, dev->debug_root,
 				    heap, &debug_shrink_fops);
+	}
+
+	if (heap->debug_show) {
+		char debug_name[64];
+
+		snprintf(debug_name, 64, "%s_stats", heap->name);
+		debugfs_create_file(debug_name, 0644, dev->debug_root,
+				    heap, &debug_heap_fops);
 	}
 
 	dev->heap_cnt++;

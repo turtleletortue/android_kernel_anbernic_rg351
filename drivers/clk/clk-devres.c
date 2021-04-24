@@ -71,7 +71,7 @@ static int __devm_clk_bulk_get(struct device *dev, int num_clks,
 	if (optional)
 		ret = clk_bulk_get_optional(dev, num_clks, clks);
 	else
-		ret = clk_bulk_get(dev, num_clks, clks);
+	ret = clk_bulk_get(dev, num_clks, clks);
 	if (!ret) {
 		devres->clks = clks;
 		devres->num_clks = num_clks;

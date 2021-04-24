@@ -666,14 +666,20 @@ static void log_iova(struct rk_iommu *iommu, int index, dma_addr_t iova)
 	if (!rk_dte_is_pt_valid(dte))
 		goto print_it;
 
-	pte_addr_phys = rk_dte_pt_address(dte) + (pte_index * 4);
+	if (iommu->version >= 0x2)
+		pte_addr_phys = rk_dte_pt_address_v2(dte) + (pte_index * 4);
+	else
+		pte_addr_phys = rk_dte_pt_address(dte) + (pte_index * 4);
 	pte_addr = phys_to_virt(pte_addr_phys);
 	pte = *pte_addr;
 
 	if (!rk_pte_is_page_valid(pte))
 		goto print_it;
 
-	page_addr_phys = rk_pte_page_address(pte) + page_offset;
+	if (iommu->version >= 0x2)
+		page_addr_phys = rk_pte_page_address_v2(pte) + page_offset;
+	else
+		page_addr_phys = rk_pte_page_address(pte) + page_offset;
 	page_flags = pte & RK_PTE_PAGE_FLAGS_MASK;
 
 print_it:
@@ -690,6 +696,7 @@ static irqreturn_t rk_iommu_irq(int irq, void *dev_id)
 	struct rk_iommu *iommu = dev_id;
 	u32 status;
 	u32 int_status;
+	u32 int_mask;
 	dma_addr_t iova;
 	irqreturn_t ret = IRQ_NONE;
 	int i, err;
@@ -734,7 +741,15 @@ static irqreturn_t rk_iommu_irq(int irq, void *dev_id)
 				dev_err(iommu->dev, "Page fault while iommu not attached to domain?\n");
 
 			rk_iommu_base_command(iommu->bases[i], RK_MMU_CMD_ZAP_CACHE);
-			rk_iommu_base_command(iommu->bases[i], RK_MMU_CMD_PAGE_FAULT_DONE);
+
+			/*
+			 * Master may clear the int_mask to prevent iommu
+			 * re-enter interrupt when mapping. So we postpone
+			 * sending PAGE_FAULT_DONE command to mapping finished.
+			 */
+			int_mask = rk_iommu_read(iommu->bases[i], RK_MMU_INT_MASK);
+			if (int_mask != 0x0)
+				rk_iommu_base_command(iommu->bases[i], RK_MMU_CMD_PAGE_FAULT_DONE);
 		}
 
 		if (int_status & RK_MMU_IRQ_BUS_ERROR)
@@ -1463,6 +1478,35 @@ static void rk_iommu_domain_free(struct iommu_domain *domain)
 	kfree(rk_domain);
 }
 
+static void rk_iommu_domain_free_v2(struct iommu_domain *domain)
+{
+	struct rk_iommu_domain *rk_domain = to_rk_domain(domain);
+	int i;
+
+	WARN_ON(!list_empty(&rk_domain->iommus));
+
+	for (i = 0; i < NUM_DT_ENTRIES; i++) {
+		u32 dte = rk_domain->dt[i];
+
+		if (rk_dte_is_pt_valid(dte)) {
+			phys_addr_t pt_phys = rk_dte_pt_address_v2(dte);
+			u32 *page_table = phys_to_virt(pt_phys);
+
+			dma_unmap_single(dma_dev, pt_phys,
+					 SPAGE_SIZE, DMA_TO_DEVICE);
+			free_page((unsigned long)page_table);
+		}
+	}
+
+	dma_unmap_single(dma_dev, rk_domain->dt_dma,
+			 SPAGE_SIZE, DMA_TO_DEVICE);
+	free_page((unsigned long)rk_domain->dt);
+
+	if (domain->type == IOMMU_DOMAIN_DMA)
+		iommu_put_dma_cookie(&rk_domain->domain);
+	kfree(rk_domain);
+}
+
 static int rk_iommu_add_device(struct device *dev)
 {
 	struct iommu_group *group;
@@ -1553,6 +1597,37 @@ static int rk_iommu_of_xlate(struct device *dev,
 	return 0;
 }
 
+void rk_iommu_mask_irq(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+	int i;
+
+	if (!iommu)
+		return;
+
+	for (i = 0; i < iommu->num_mmu; i++)
+		rk_iommu_write(iommu->bases[i], RK_MMU_INT_MASK, 0);
+}
+EXPORT_SYMBOL(rk_iommu_mask_irq);
+
+void rk_iommu_unmask_irq(struct device *dev)
+{
+	struct rk_iommu *iommu = rk_iommu_from_dev(dev);
+	int i;
+
+	if (!iommu)
+		return;
+
+	for (i = 0; i < iommu->num_mmu; i++) {
+		/* Need to zap tlb in case of mapping during pagefault */
+		rk_iommu_base_command(iommu->bases[i], RK_MMU_CMD_ZAP_CACHE);
+		rk_iommu_write(iommu->bases[i], RK_MMU_INT_MASK, RK_MMU_IRQ_MASK);
+		/* Leave iommu in pagefault state until mapping finished */
+		rk_iommu_base_command(iommu->bases[i], RK_MMU_CMD_PAGE_FAULT_DONE);
+	}
+}
+EXPORT_SYMBOL(rk_iommu_unmask_irq);
+
 static const struct iommu_ops rk_iommu_ops = {
 	.domain_alloc = rk_iommu_domain_alloc,
 	.domain_free = rk_iommu_domain_free,
@@ -1573,7 +1648,7 @@ static const struct iommu_ops rk_iommu_ops = {
 
 static const struct iommu_ops rk_iommu_ops_v2 = {
 	.domain_alloc = rk_iommu_domain_alloc,
-	.domain_free = rk_iommu_domain_free,
+	.domain_free = rk_iommu_domain_free_v2,
 	.attach_dev = rk_iommu_attach_device,
 	.detach_dev = rk_iommu_detach_device,
 	.map = rk_iommu_map_v2,

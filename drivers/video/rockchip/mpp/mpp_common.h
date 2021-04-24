@@ -95,6 +95,7 @@ enum MPP_DEV_COMMAND_TYPE {
 	MPP_CMD_SET_REG_WRITE		= MPP_CMD_SEND_BASE + 0,
 	MPP_CMD_SET_REG_READ		= MPP_CMD_SEND_BASE + 1,
 	MPP_CMD_SET_REG_ADDR_OFFSET	= MPP_CMD_SEND_BASE + 2,
+	MPP_CMD_SET_RCB_INFO		= MPP_CMD_SEND_BASE + 3,
 	MPP_CMD_SEND_BUTT,
 
 	MPP_CMD_POLL_BASE		= 0x300,
@@ -500,6 +501,8 @@ int mpp_task_dump_mem_region(struct mpp_dev *mpp,
 			     struct mpp_task *task);
 int mpp_task_dump_reg(struct mpp_dev *mpp,
 		      struct mpp_task *task);
+int mpp_task_dump_hw_reg(struct mpp_dev *mpp,
+			 struct mpp_task *task);
 
 int mpp_dev_probe(struct mpp_dev *mpp,
 		  struct platform_device *pdev);

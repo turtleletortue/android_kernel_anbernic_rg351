@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2007 - 2017 Realtek Corporation.
+ * Copyright(c) 2007 - 2019 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -14,11 +14,19 @@
  *****************************************************************************/
 #ifndef __DRV_CONF_H__
 #define __DRV_CONF_H__
+#include "autoconf.h"
 #include "hal_ic_cfg.h"
-#include <generated/autoconf.h>
-#include "rtl_autoconf.h"
 
 #define CONFIG_RSSI_PRIORITY
+
+/*
+ * RTW_BUSY_DENY_SCAN control if scan would be denied by busy traffic.
+ * When this defined, BUSY_TRAFFIC_SCAN_DENY_PERIOD would be used to judge if
+ * scan request coming from scan UI. Scan request from scan UI would be
+ * exception and never be denied by busy traffic.
+ */
+#define RTW_BUSY_DENY_SCAN
+
 #ifdef CONFIG_RTW_REPEATER_SON
 	#ifndef CONFIG_AP
 		#define CONFIG_AP
@@ -63,15 +71,67 @@
 
 #endif
 
-/* Older Android kernel doesn't has CONFIG_ANDROID defined,
- * add this to force CONFIG_ANDROID defined */
-#ifdef CONFIG_PLATFORM_ANDROID
-	#ifndef CONFIG_ANDROID
-		#define CONFIG_ANDROID
-	#endif
-#endif
+/* Default enable single wiphy if driver ver >= 5.9 */
+#define RTW_SINGLE_WIPHY
 
-#ifdef CONFIG_ANDROID
+#ifdef CONFIG_RTW_ANDROID
+
+	#include <linux/version.h>
+
+	#ifndef CONFIG_IOCTL_CFG80211
+	#define CONFIG_IOCTL_CFG80211
+	#endif
+
+	#ifndef RTW_USE_CFG80211_STA_EVENT
+	#define RTW_USE_CFG80211_STA_EVENT
+	#endif
+
+	#if (CONFIG_RTW_ANDROID > 4)
+	#ifndef CONFIG_RADIO_WORK
+	#define CONFIG_RADIO_WORK
+	#endif
+	#endif
+
+    #if (CONFIG_RTW_ANDROID <= 7)
+        #ifdef RTW_SINGLE_WIPHY
+        #undef RTW_SINGLE_WIPHY
+        #endif
+    #endif
+
+	#if (CONFIG_RTW_ANDROID >= 8)
+		#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,18,0))
+		#ifndef CONFIG_RTW_WIFI_HAL
+		#define CONFIG_RTW_WIFI_HAL
+		#endif
+		#else
+ 		#error "Linux kernel version is too old\n"
+		#endif
+	#endif
+
+	#ifdef CONFIG_RTW_WIFI_HAL
+	#ifndef CONFIG_RTW_WIFI_HAL_DEBUG
+	//#define CONFIG_RTW_WIFI_HAL_DEBUG
+	#endif
+	#ifndef CONFIG_RTW_CFGVENDOR_LLSTATS
+	#define CONFIG_RTW_CFGVENDOR_LLSTATS
+	#endif
+	#ifndef CONFIG_RTW_CFGVENDOR_RANDOM_MAC_OUI
+	#define CONFIG_RTW_CFGVENDOR_RANDOM_MAC_OUI
+	#endif
+	#ifndef CONFIG_RTW_CFGVENDOR_RSSIMONITOR
+	#define CONFIG_RTW_CFGVENDOR_RSSIMONITOR
+	#endif
+	#ifndef CONFIG_RTW_CFGVENDOR_WIFI_LOGGER
+	#define CONFIG_RTW_CFGVENDOR_WIFI_LOGGER
+	#endif
+	#if (CONFIG_RTW_ANDROID >= 10)
+	#ifndef CONFIG_RTW_CFGVENDOR_WIFI_OFFLOAD
+	//#define CONFIG_RTW_CFGVENDOR_WIFI_OFFLOAD
+	#endif
+	#endif
+	#endif // CONFIG_RTW_WIFI_HAL
+
+
 	/* Some Android build will restart the UI while non-printable ascii is passed
 	* between java and c/c++ layer (JNI). We force CONFIG_VALIDATE_SSID
 	* for Android here. If you are sure there is no risk on your system about this,
@@ -80,7 +140,7 @@
 
 	/* Android expect dbm as the rx signal strength unit */
 	#define CONFIG_SIGNAL_DISPLAY_DBM
-#endif
+#endif // CONFIG_RTW_ANDROID
 
 /*
 #if defined(CONFIG_HAS_EARLYSUSPEND) && defined(CONFIG_RESUME_IN_WORKQUEUE)
@@ -111,24 +171,13 @@
 	#define CONFIG_USB_VENDOR_REQ_MUTEX
 #endif
 
-#if defined(CONFIG_DFS_SLAVE_WITH_RADAR_DETECT) && !defined(CONFIG_DFS_MASTER)
-	#define CONFIG_DFS_MASTER
-#endif
-
-#if !defined(CONFIG_AP_MODE) && defined(CONFIG_DFS_MASTER)
-	#error "enable CONFIG_DFS_MASTER without CONFIG_AP_MODE"
-#endif
-
 #ifdef CONFIG_WIFI_MONITOR
-	/*	#define CONFIG_MONITOR_MODE_XMIT	*/
+	#define CONFIG_MONITOR_MODE_XMIT
 #endif
 
 #ifdef CONFIG_CUSTOMER_ALIBABA_GENERAL
 	#ifndef CONFIG_WIFI_MONITOR
 		#define CONFIG_WIFI_MONITOR
-	#endif
-	#ifndef CONFIG_MONITOR_MODE_XMIT
-		#define CONFIG_MONITOR_MODE_XMIT
 	#endif
 	#ifdef CONFIG_POWER_SAVING
 		#undef CONFIG_POWER_SAVING
@@ -142,6 +191,11 @@
 	#ifdef CONFIG_BEAMFORMING
 		#undef CONFIG_BEAMFORMING
 	#endif
+#endif
+
+#ifdef CONFIG_AP_MODE
+	#define CONFIG_LIMITED_AP_NUM 1
+	#define CONFIG_TX_MCAST2UNI /* AP mode support IP multicast->unicast */
 #endif
 
 #ifdef CONFIG_RTW_MESH
@@ -186,6 +240,22 @@
 #define RTW_SCAN_SPARSE_BG 0
 #define RTW_SCAN_SPARSE_ROAMING_ACTIVE 1
 
+#ifndef CONFIG_TX_AC_LIFETIME
+#define CONFIG_TX_AC_LIFETIME 1
+#endif
+#ifndef CONFIG_TX_ACLT_FLAGS
+#define CONFIG_TX_ACLT_FLAGS 0x00
+#endif
+#ifndef CONFIG_TX_ACLT_CONF_DEFAULT
+#define CONFIG_TX_ACLT_CONF_DEFAULT {0x0, 1024 * 1000, 1024 * 1000}
+#endif
+#ifndef CONFIG_TX_ACLT_CONF_AP_M2U
+#define CONFIG_TX_ACLT_CONF_AP_M2U {0xF, 256 * 1000, 256 * 1000}
+#endif
+#ifndef CONFIG_TX_ACLT_CONF_MESH
+#define CONFIG_TX_ACLT_CONF_MESH {0xF, 256 * 1000, 256 * 1000}
+#endif
+
 #ifndef CONFIG_RTW_HIQ_FILTER
 	#define CONFIG_RTW_HIQ_FILTER 1
 #endif
@@ -210,8 +280,36 @@
 	#define CONFIG_RTW_EXCL_CHS {0}
 #endif
 
-#ifndef CONFIG_RTW_DFS_REGION_DOMAIN
+#ifndef CONFIG_IEEE80211_BAND_5GHZ
+	#if defined(CONFIG_RTL8821A) || defined(CONFIG_RTL8821C) \
+		|| defined(CONFIG_RTL8812A) || defined(CONFIG_RTL8822B) || defined(CONFIG_RTL8822C) \
+		|| defined(CONFIG_RTL8814A) || defined(CONFIG_RTL8814B)
+	#define CONFIG_IEEE80211_BAND_5GHZ 1
+	#else
+	#define CONFIG_IEEE80211_BAND_5GHZ 0
+	#endif
+#endif
+
+#ifndef CONFIG_DFS
+#define CONFIG_DFS 1
+#endif
+
+#if CONFIG_IEEE80211_BAND_5GHZ && CONFIG_DFS && defined(CONFIG_AP_MODE)
+	#if !defined(CONFIG_DFS_SLAVE_WITH_RADAR_DETECT)
+	#define CONFIG_DFS_SLAVE_WITH_RADAR_DETECT 0
+	#endif
+	#if !defined(CONFIG_DFS_MASTER) || CONFIG_DFS_SLAVE_WITH_RADAR_DETECT
+	#define CONFIG_DFS_MASTER
+	#endif
+	#if defined(CONFIG_DFS_MASTER) && !defined(CONFIG_RTW_DFS_REGION_DOMAIN)
 	#define CONFIG_RTW_DFS_REGION_DOMAIN 0
+	#endif
+#else
+	#undef CONFIG_DFS_MASTER
+	#undef CONFIG_RTW_DFS_REGION_DOMAIN
+	#define CONFIG_RTW_DFS_REGION_DOMAIN 0
+	#undef CONFIG_DFS_SLAVE_WITH_RADAR_DETECT
+	#define CONFIG_DFS_SLAVE_WITH_RADAR_DETECT 0
 #endif
 
 #ifndef CONFIG_TXPWR_BY_RATE_EN
@@ -260,11 +358,20 @@
 	#define CONFIG_TXPWR_BY_RATE_EN 1
 	#define CONFIG_RTW_CUSTOMIZE_BEEDCA		0x0000431C
 	#define CONFIG_RTW_CUSTOMIZE_BWMODE		0x00
-	#define CONFIG_RTW_CUSTOMIZE_RLSTA		0x7
+	#define CONFIG_RTW_CUSTOMIZE_RLSTA		0x30
 #if defined(CONFIG_RTL8192E) || defined(CONFIG_RTL8192F) || defined(CONFIG_RTL8822B)
-	#define CONFIG_RTW_TX_2PATH_EN		/*	mutually incompatible with STBC_TX & Beamformer	*/
+	#define CONFIG_RTW_TX_NPATH_EN		/*	mutually incompatible with STBC_TX & Beamformer	*/
 #endif
 #endif
+/* #define CONFIG_RTW_TOKEN_BASED_XMIT */
+#ifdef CONFIG_RTW_TOKEN_BASED_XMIT
+	#define NR_TBTX_SLOT			4
+	#define NR_MAXSTA_INSLOT		5
+	#define TBTX_TX_DURATION		30
+
+	#define MAX_TXPAUSE_DURATION	(TBTX_TX_DURATION*NR_TBTX_SLOT)
+#endif
+
 /*#define CONFIG_EXTEND_LOWRATE_TXOP			*/
 
 #ifndef CONFIG_RTW_RX_AMPDU_SZ_LIMIT_1SS
@@ -361,7 +468,7 @@ defined(CONFIG_RTL8723B) || defined(CONFIG_RTL8703B) || defined(CONFIG_RTL8723D)
 #define CONFIG_HWMPCAP_GEN3
 #endif
 
-#if defined(CONFIG_HWMPCAP_GEN1) && (CONFIG_IFACE_NUMBER > 2) 
+#if defined(CONFIG_HWMPCAP_GEN1) && (CONFIG_IFACE_NUMBER > 2)
 	#ifdef CONFIG_POWER_SAVING
 	/*#warning "Disable PS when CONFIG_IFACE_NUMBER > 2"*/
 	#undef CONFIG_POWER_SAVING
@@ -370,6 +477,10 @@ defined(CONFIG_RTL8723B) || defined(CONFIG_RTL8703B) || defined(CONFIG_RTL8723D)
 	#ifdef CONFIG_WOWLAN
 	#error "This IC can't support MI and WoWLan at the same time"
 	#endif
+#endif
+
+#if defined(CONFIG_HWMPCAP_GEN1) && (CONFIG_IFACE_NUMBER > 3)
+        #error " This IC can't support over 3 interfaces !!"
 #endif
 
 #if (CONFIG_IFACE_NUMBER > 4)
@@ -391,6 +502,9 @@ defined(CONFIG_RTL8723B) || defined(CONFIG_RTL8703B) || defined(CONFIG_RTL8723D)
 	#endif
 
 	#ifdef CONFIG_AP_MODE
+		#undef CONFIG_LIMITED_AP_NUM
+		#define CONFIG_LIMITED_AP_NUM	2
+
 		#define CONFIG_SUPPORT_MULTI_BCN
 
 		#define CONFIG_SWTIMER_BASED_TXBCN
@@ -402,10 +516,11 @@ defined(CONFIG_RTL8723B) || defined(CONFIG_RTL8703B) || defined(CONFIG_RTL8723D)
 			#ifdef CONFIG_SWTIMER_BASED_TXBCN
 				#undef CONFIG_SWTIMER_BASED_TXBCN
 			#endif
-
+			#undef CONFIG_LIMITED_AP_NUM
 			#define CONFIG_LIMITED_AP_NUM	4
 		#endif
-	#endif /*CONFIG_HWMPCAP_GEN2*/
+
+		#endif /*CONFIG_HWMPCAP_GEN2*/
 	#endif /*CONFIG_AP_MODE*/
 
 	#ifdef CONFIG_HWMPCAP_GEN2 /*CONFIG_RTL8822B/CONFIG_RTL8821C/CONFIG_RTL8822C*/
@@ -417,11 +532,7 @@ defined(CONFIG_RTL8723B) || defined(CONFIG_RTL8703B) || defined(CONFIG_RTL8723D)
 #define MACID_NUM_SW_LIMIT 32
 #define SEC_CAM_ENT_NUM_SW_LIMIT 32
 
-#if defined(CONFIG_RTL8812A) || defined(CONFIG_RTL8821A) || defined(CONFIG_RTL8814A)
-	#define CONFIG_IEEE80211_BAND_5GHZ
-#endif
-
-#if defined(CONFIG_WOWLAN) && (defined(CONFIG_RTL8822B) || defined(CONFIG_RTL8821C) || defined(CONFIG_RTL8814A))
+#if defined(CONFIG_WOWLAN) && (defined(CONFIG_RTL8822B) || defined(CONFIG_RTL8821C) || defined(CONFIG_RTL8814A) || defined(CONFIG_RTL8822C) || defined(CONFIG_RTL8814B))
 	#define CONFIG_WOW_PATTERN_HW_CAM
 #endif
 
@@ -488,6 +599,61 @@ defined(CONFIG_RTL8723B) || defined(CONFIG_RTL8703B) || defined(CONFIG_RTL8723D)
 #endif
 #endif
 
+/* IPS */
+#ifndef RTW_IPS_MODE
+	#if defined(CONFIG_IPS)
+		#define RTW_IPS_MODE 1
+	#else
+		#define RTW_IPS_MODE 0
+	#endif
+#endif /* !RTW_IPS_MODE */
+
+#if (RTW_IPS_MODE > 1 || RTW_IPS_MODE < 0)
+	#error "The CONFIG_IPS_MODE value is wrong. Please follow HowTo_enable_the_power_saving_functionality.pdf.\n"
+#endif
+
+/* LPS */
+#ifndef RTW_LPS_MODE
+	#if defined(CONFIG_LPS_PG) || defined(CONFIG_LPS_PG_DDMA)
+		#define RTW_LPS_MODE 3
+	#elif defined(CONFIG_LPS_LCLK)
+		#define RTW_LPS_MODE 2
+	#elif defined(CONFIG_LPS)
+		#define RTW_LPS_MODE 1
+	#else
+		#define RTW_LPS_MODE 0
+	#endif
+#endif /* !RTW_LPS_MODE */
+
+#if (RTW_LPS_MODE > 3 || RTW_LPS_MODE < 0)
+	#error "The CONFIG_LPS_MODE value is wrong. Please follow HowTo_enable_the_power_saving_functionality.pdf.\n"
+#endif
+
+#ifndef RTW_LPS_1T1R
+#define RTW_LPS_1T1R 0
+#endif
+
+#ifndef RTW_WOW_LPS_1T1R
+#define RTW_WOW_LPS_1T1R 0
+#endif
+
+/* WOW LPS */
+#ifndef RTW_WOW_LPS_MODE
+	#if defined(CONFIG_LPS_PG) || defined(CONFIG_LPS_PG_DDMA)
+		#define RTW_WOW_LPS_MODE 3
+	#elif defined(CONFIG_LPS_LCLK)
+		#define RTW_WOW_LPS_MODE 2
+	#elif defined(CONFIG_LPS)
+		#define RTW_WOW_LPS_MODE 1
+	#else
+		#define RTW_WOW_LPS_MODE 0
+	#endif
+#endif /* !RTW_WOW_LPS_MODE */
+
+#if (RTW_WOW_LPS_MODE > 3 || RTW_WOW_LPS_MODE < 0)
+	#error "The RTW_WOW_LPS_MODE value is wrong. Please follow HowTo_enable_the_power_saving_functionality.pdf.\n"
+#endif
+
 #ifdef RTW_REDUCE_SCAN_SWITCH_CH_TIME
 #ifndef CONFIG_RTL8822B
 	#error "Only 8822B support RTW_REDUCE_SCAN_SWITCH_CH_TIME"
@@ -497,14 +663,25 @@ defined(CONFIG_RTL8723B) || defined(CONFIG_RTL8703B) || defined(CONFIG_RTL8723D)
 	#endif
 #endif
 
-#define CONFIG_RTW_TPT_MODE 
+#define CONFIG_RTW_TPT_MODE
 
 #ifdef CONFIG_PCI_BCN_POLLING
 #define CONFIG_BCN_ICF
-#endif 
+#endif
 
 #ifndef CONFIG_PCI_MSI
 #define CONFIG_RTW_PCI_MSI_DISABLE
+#endif
+
+#if defined(CONFIG_PCI_DYNAMIC_ASPM_L1_LATENCY) ||	\
+    defined(CONFIG_PCI_DYNAMIC_ASPM_LINK_CTRL)
+#define CONFIG_PCI_DYNAMIC_ASPM
+#endif
+
+#if 0
+/* Debug related compiler flags */
+#define DBG_THREAD_PID	/* Add thread pid to debug message prefix */
+#define DBG_CPU_INFO	/* Add CPU info to debug message prefix */
 #endif
 
 #endif /* __DRV_CONF_H__ */

@@ -14,40 +14,23 @@
  *****************************************************************************/
 #define _RTL8812A_PHYCFG_C_
 
+/* #include <drv_types.h> */
+
 #include <rtl8812a_hal.h>
 
-/* Manual Transmit Power Control 
-   The following options take values from 0 to 63, where:
-   0 - disable
-   1 - lowest transmit power the device can do
-   2 - highest transmit power the device can do
-   Note that these options may override your country's regulations about transmit power.
-   Setting the device to work at higher transmit powers most of the time may cause premature 
-   failure or damage by overheating. Make sure the device has enough airflow before you increase this.
-   It is currently unknown what these values translate to in dBm.
-*/
+/*---------------------Define local function prototype-----------------------*/
 
-// Transmit Power Boost
-// This value is added to the device's calculation of transmit power index.
-// Useful if you want to keep power usage low while still boosting/decreasing transmit power.
-// Can take a negative value as well to reduce power.
-// Zero disables it. Default: 2, for a tiny boost.
-int transmit_power_boost = 2;
-// (ADVANCED) To know what transmit powers this device decides to use dynamically, see:
-// https://github.com/lwfinger/rtl8192ee/blob/42ad92dcc71cb15a62f8c39e50debe3a28566b5f/hal/phydm/rtl8192e/halhwimg8192e_rf.c#L1310
+/*----------------------------Function Body----------------------------------*/
 
-// Transmit Power Override
-// This value completely overrides the driver's calculations and uses only one value for all transmissions.
-// Zero disables it. Default: 0
-int transmit_power_override = 0;
-
-/* Manual Transmit Power Control */
+/*
+ * 1. BB register R/W API
+ *   */
 
 u32
 PHY_QueryBBReg8812(
-	IN	PADAPTER	Adapter,
-	IN	u32			RegAddr,
-	IN	u32			BitMask
+		PADAPTER	Adapter,
+		u32			RegAddr,
+		u32			BitMask
 )
 {
 	u32	ReturnValue = 0, OriginalValue, BitShift;
@@ -68,15 +51,15 @@ PHY_QueryBBReg8812(
 }
 
 
-VOID
+void
 PHY_SetBBReg8812(
-	IN	PADAPTER	Adapter,
-	IN	u4Byte		RegAddr,
-	IN	u4Byte		BitMask,
-	IN	u4Byte		Data
+		PADAPTER	Adapter,
+		u32		RegAddr,
+		u32		BitMask,
+		u32		Data
 )
 {
-	u4Byte			OriginalValue, BitShift;
+	u32			OriginalValue, BitShift;
 
 #if (DISABLE_BB_RF == 1)
 	return;
@@ -100,9 +83,9 @@ PHY_SetBBReg8812(
 
 static	u32
 phy_RFSerialRead(
-	IN	PADAPTER		Adapter,
-	IN	enum rf_path		eRFPath,
-	IN	u32				Offset
+		PADAPTER		Adapter,
+		enum rf_path		eRFPath,
+		u32				Offset
 )
 {
 	u32							retValue = 0;
@@ -154,12 +137,12 @@ phy_RFSerialRead(
 }
 
 
-static	VOID
+static	void
 phy_RFSerialWrite(
-	IN	PADAPTER		Adapter,
-	IN	enum rf_path		eRFPath,
-	IN	u32				Offset,
-	IN	u32				Data
+		PADAPTER		Adapter,
+		enum rf_path		eRFPath,
+		u32				Offset,
+		u32				Data
 )
 {
 	u32							DataAndAddr = 0;
@@ -190,10 +173,10 @@ phy_RFSerialWrite(
 
 u32
 PHY_QueryRFReg8812(
-	IN	PADAPTER		Adapter,
-	IN	enum rf_path		eRFPath,
-	IN	u32				RegAddr,
-	IN	u32				BitMask
+		PADAPTER		Adapter,
+		enum rf_path		eRFPath,
+		u32				RegAddr,
+		u32				BitMask
 )
 {
 	u32				Original_Value, Readback_Value, BitShift;
@@ -210,13 +193,13 @@ PHY_QueryRFReg8812(
 	return Readback_Value;
 }
 
-VOID
+void
 PHY_SetRFReg8812(
-	IN	PADAPTER		Adapter,
-	IN	enum rf_path		eRFPath,
-	IN	u32				RegAddr,
-	IN	u32				BitMask,
-	IN	u32				Data
+		PADAPTER		Adapter,
+		enum rf_path		eRFPath,
+		u32				RegAddr,
+		u32				BitMask,
+		u32				Data
 )
 {
 #if (DISABLE_BB_RF == 1)
@@ -265,9 +248,9 @@ s32 PHY_MACConfig8812(PADAPTER Adapter)
 }
 
 
-static	VOID
+static	void
 phy_InitBBRFRegisterDefinition(
-	IN	PADAPTER		Adapter
+		PADAPTER		Adapter
 )
 {
 	HAL_DATA_TYPE		*pHalData = GET_HAL_DATA(Adapter);
@@ -297,9 +280,9 @@ phy_InitBBRFRegisterDefinition(
 	pHalData->PHYRegDef[RF_PATH_B].rfLSSIReadBackPi = rB_PIRead_Jaguar;
 }
 
-VOID
+void
 PHY_BB8812_Config_1T(
-	IN PADAPTER Adapter
+		PADAPTER Adapter
 )
 {
 	/* BB OFDM RX Path_A */
@@ -322,7 +305,7 @@ PHY_BB8812_Config_1T(
 
 static	int
 phy_BB8812_Config_ParaFile(
-	IN	PADAPTER	Adapter
+		PADAPTER	Adapter
 )
 {
 	HAL_DATA_TYPE		*pHalData = GET_HAL_DATA(Adapter);
@@ -385,7 +368,7 @@ phy_BB_Config_ParaFile_Fail:
 
 int
 PHY_BBConfig8812(
-	IN	PADAPTER	Adapter
+		PADAPTER	Adapter
 )
 {
 	int	rtStatus = _SUCCESS;
@@ -418,14 +401,18 @@ PHY_BBConfig8812(
 	/*  */
 	rtStatus = phy_BB8812_Config_ParaFile(Adapter);
 
-	hal_set_crystal_cap(Adapter, pHalData->crystal_cap);
+	if (rtw_phydm_set_crystal_cap(Adapter, pHalData->crystal_cap) == _FALSE) {
+		RTW_ERR("Init crystal_cap failed\n");
+		rtw_warn_on(1);
+		rtStatus = _FAIL;
+	}
 
 	return rtStatus;
 }
 
 int
 PHY_RFConfig8812(
-	IN	PADAPTER	Adapter
+		PADAPTER	Adapter
 )
 {
 	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(Adapter);
@@ -446,28 +433,31 @@ PHY_RFConfig8812(
 	return rtStatus;
 }
 
-VOID
+void
 PHY_TxPowerTrainingByPath_8812(
-	IN	PADAPTER			Adapter,
-	IN	enum channel_width	BandWidth,
-	IN	u8					Channel,
-	IN	u8					RfPath
+		PADAPTER			Adapter,
+		enum channel_width	BandWidth,
+		u8					Channel,
+		u8					RfPath
 )
 {
 	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(Adapter);
+	struct hal_spec_t *hal_spec = GET_HAL_SPEC(Adapter);
 
 	u8	i;
 	u32	PowerLevel, writeData, writeOffset;
 
-	if (RfPath >= pHalData->NumTotalRFPath)
+	if (RfPath >= hal_spec->rf_reg_path_num)
 		return;
 
 	writeData = 0;
 	if (RfPath == RF_PATH_A) {
-		PowerLevel = phy_get_tx_power_index(Adapter, RF_PATH_A, MGN_MCS7, BandWidth, Channel);
+		PowerLevel = phy_get_tx_power_index_ex(Adapter, RF_PATH_A, HT_1SS, MGN_MCS7
+			, BandWidth, pHalData->current_band_type, Channel, 0);
 		writeOffset =  rA_TxPwrTraing_Jaguar;
 	} else {
-		PowerLevel = phy_get_tx_power_index(Adapter, RF_PATH_B, MGN_MCS7, BandWidth, Channel);
+		PowerLevel = phy_get_tx_power_index_ex(Adapter, RF_PATH_B, HT_1SS, MGN_MCS7
+			, BandWidth, pHalData->current_band_type, Channel, 0);
 		writeOffset =  rB_TxPwrTraing_Jaguar;
 	}
 
@@ -484,47 +474,23 @@ PHY_TxPowerTrainingByPath_8812(
 	phy_set_bb_reg(Adapter, writeOffset, 0xffffff, writeData);
 }
 
-VOID
-PHY_GetTxPowerLevel8812(
-	IN	PADAPTER		Adapter,
-	OUT s32		*powerlevel
-)
-{
-	/*HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(Adapter);
-	*powerlevel = pHalData->CurrentTxPwrIdx;*/
-#if 0
-	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(Adapter);
-	PMGNT_INFO		pMgntInfo = &(Adapter->MgntInfo);
-	s4Byte			TxPwrDbm = 13;
-
-	if (pMgntInfo->ClientConfigPwrInDbm != UNSPECIFIED_PWR_DBM)
-		*powerlevel = pMgntInfo->ClientConfigPwrInDbm;
-	else
-		*powerlevel = TxPwrDbm;
-#endif
-}
-
-/* create new definition of PHY_SetTxPowerLevel8812 by YP.
- * Page revised on 20121106
- * the new way to set tx power by rate, NByte access, here N byte shall be 4 byte(DWord) or NByte(N>4) access. by page/YP, 20121106 */
-VOID
+void
 PHY_SetTxPowerLevel8812(
-	IN	PADAPTER		Adapter,
-	IN	u8				Channel
+		PADAPTER		Adapter,
+		u8				Channel
 )
 {
 
 	PHAL_DATA_TYPE	pHalData = GET_HAL_DATA(Adapter);
+	struct hal_spec_t *hal_spec = GET_HAL_SPEC(Adapter);
 	u8			path = 0;
 
-	/* RTW_INFO("==>PHY_SetTxPowerLevel8812()\n"); */
-
-	for (path = RF_PATH_A; path < pHalData->NumTotalRFPath; ++path) {
-		phy_set_tx_power_level_by_path(Adapter, Channel, path);
-		PHY_TxPowerTrainingByPath_8812(Adapter, pHalData->current_channel_bw, Channel, path);
+	for (path = RF_PATH_A; path < hal_spec->rf_reg_path_num; ++path) {
+		if (GET_HAL_TX_PATH_BMP(Adapter) & BIT(path)) {
+			phy_set_tx_power_level_by_path(Adapter, Channel, path);
+			PHY_TxPowerTrainingByPath_8812(Adapter, pHalData->current_channel_bw, Channel, path);
+		}
 	}
-
-	/* RTW_INFO("<==PHY_SetTxPowerLevel8812()\n"); */
 }
 
 
@@ -534,27 +500,10 @@ PHY_SetTxPowerLevel8812(
  *
  *                                                                                    <20120830, Kordan>
  **************************************************************************************************************/
-u8
-PHY_GetTxPowerIndex_8812A(
-	IN	PADAPTER			pAdapter,
-	IN	enum rf_path			RFPath,
-	IN	u8					Rate,
-	IN	u8					BandWidth,
-	IN	u8					Channel,
-	struct txpwr_idx_comp *tic
-)
+bool phy_get_txpwr_target_skip_by_rate_8812a(_adapter *adapter, enum MGN_RATE rate)
 {
-	PHAL_DATA_TYPE pHalData = GET_HAL_DATA(pAdapter);
-	struct hal_spec_t *hal_spec = GET_HAL_SPEC(pAdapter);
-	s16 power_idx;
-	u8 base_idx = 0;
-	s8 by_rate_diff = 0, limit = 0, tpt_offset = 0, extra_bias = 0;
-	u8 ntx_idx = phy_get_current_tx_num(pAdapter, Rate);
-	BOOLEAN bIn24G = _FALSE;
+	bool skip = 0;
 
-	base_idx = PHY_GetTxPowerIndexBase(pAdapter, RFPath, Rate, ntx_idx, BandWidth, Channel, &bIn24G);
-
-	by_rate_diff = PHY_GetTxPowerByRate(pAdapter, (u8)(!bIn24G), RFPath, Rate);
 #ifdef CONFIG_USB_HCI
 	/* no external power, so disable power by rate in VHT to avoid card disable */
 #ifndef CONFIG_USE_EXTERNAL_POWER
@@ -562,50 +511,20 @@ PHY_GetTxPowerIndex_8812A(
 	/*	and the current will be more than 500mA and card disappear. We need to limit	*/
 	/*	TX power with any power by rate for VHT in U2.								*/
 	/*	2013/01/30 MH According to power current test compare with BCM AC NIC, we	*/
-	/*	decide to use host hub = 2.0 mode to enable tx power limit behavior			*/
+	/*	decide to use host hub = 2.0 mode to enable tx power limit behavior 		*/
 	/*	2013/01/29 MH For preventing VHT rate of 8812AU to be used in USB 2.0 mode	*/
-
-	if (adapter_to_dvobj(pAdapter)->usb_speed == RTW_USB_SPEED_2
-		&& IS_HARDWARE_TYPE_8812AU(pAdapter)) {
-
+	if (IS_HARDWARE_TYPE_8812AU(adapter)
+		&& adapter_to_dvobj(adapter)->usb_speed == RTW_USB_SPEED_2
+	) {
 		/* VHT rate 0~7, disable TxPowerByRate, but enable TX power limit */
-		if ((Rate >= MGN_VHT1SS_MCS0 && Rate <= MGN_VHT1SS_MCS7) ||
-			(Rate >= MGN_VHT2SS_MCS0 && Rate <= MGN_VHT2SS_MCS7))
-			by_rate_diff = 0;
+		if ((rate >= MGN_VHT1SS_MCS0 && rate <= MGN_VHT1SS_MCS7) ||
+			(rate >= MGN_VHT2SS_MCS0 && rate <= MGN_VHT2SS_MCS7))
+			skip = 1;
 	}
 #endif
 #endif
 
-	limit = PHY_GetTxPowerLimit(pAdapter, NULL, (u8)(!bIn24G), pHalData->current_channel_bw, RFPath, Rate, ntx_idx, pHalData->current_channel);
-
-	tpt_offset = PHY_GetTxPowerTrackingOffset(pAdapter, RFPath, Rate);
-
-	if (tic) {
-		tic->ntx_idx = ntx_idx;
-		tic->base = base_idx;
-		tic->by_rate = by_rate_diff;
-		tic->limit = limit;
-		tic->tpt = tpt_offset;
-		tic->ebias = extra_bias;
-	}
-
-	by_rate_diff = by_rate_diff > limit ? limit : by_rate_diff;
-	power_idx = base_idx + by_rate_diff + tpt_offset + extra_bias + transmit_power_boost;
-
-	if (transmit_power_override != 0)
-		power_idx = transmit_power_override;
-	if (power_idx < 1)
-		power_idx = 1;
-
-	if (power_idx < 0)
-		power_idx = 0;
-	else if (power_idx > hal_spec->txgi_max)
-		power_idx = hal_spec->txgi_max;
-
-	if (power_idx % 2 == 1 && !IS_NORMAL_CHIP(pHalData->version_id))
-		--power_idx;
-
-	return power_idx;
+	return skip;
 }
 
 /**************************************************************************************************************
@@ -615,12 +534,12 @@ PHY_GetTxPowerIndex_8812A(
  *                                                                                    <20120830, Kordan>
  **************************************************************************************************************/
 
-VOID
+void
 PHY_SetTxPowerIndex_8812A(
-	IN	PADAPTER		Adapter,
-	IN	u32				PowerIndex,
-	IN	enum rf_path		RFPath,
-	IN	u8				Rate
+		PADAPTER		Adapter,
+		u32				PowerIndex,
+		enum rf_path		RFPath,
+		u8				Rate
 )
 {
 	HAL_DATA_TYPE		*pHalData	= GET_HAL_DATA(Adapter);
@@ -957,20 +876,10 @@ PHY_SetTxPowerIndex_8812A(
 		RTW_INFO("Invalid RFPath!!\n");
 }
 
-BOOLEAN
-PHY_UpdateTxPowerDbm8812(
-	IN	PADAPTER	Adapter,
-	IN	int		powerInDbm
-)
-{
-	return _TRUE;
-}
-
-
 u32 phy_get_tx_bb_swing_8812a(
-	IN	PADAPTER	Adapter,
-	IN	BAND_TYPE	Band,
-	IN	enum rf_path	RFPath
+		PADAPTER	Adapter,
+		BAND_TYPE	Band,
+		enum rf_path	RFPath
 )
 {
 	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(GetDefaultAdapter(Adapter));
@@ -1097,13 +1006,13 @@ u32 phy_get_tx_bb_swing_8812a(
 	return out;
 }
 
-VOID
+void
 phy_SetRFEReg8812(
-	IN PADAPTER		Adapter,
-	IN u8			Band
+		PADAPTER		Adapter,
+		u8			Band
 )
 {
-	u1Byte			u1tmp = 0;
+	u8			u1tmp = 0;
 	HAL_DATA_TYPE	*pHalData	= GET_HAL_DATA(Adapter);
 
 	if (Band == BAND_ON_2_4G) {
@@ -1219,9 +1128,9 @@ phy_SetRFEReg8812(
 }
 
 void phy_SetBBSwingByBand_8812A(
-	IN PADAPTER		Adapter,
-	IN u8			Band,
-	IN u1Byte		PreviousBand
+		PADAPTER		Adapter,
+		u8			Band,
+		u8		PreviousBand
 )
 {
 	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(GetDefaultAdapter(Adapter));
@@ -1260,10 +1169,10 @@ void phy_SetBBSwingByBand_8812A(
 }
 
 
-VOID
+void
 phy_SetRFEReg8821(
-	IN PADAPTER	Adapter,
-	IN u1Byte		Band
+		PADAPTER	Adapter,
+		u8		Band
 )
 {
 	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(Adapter);
@@ -1305,8 +1214,8 @@ phy_SetRFEReg8821(
 
 s32
 PHY_SwitchWirelessBand8812(
-	IN PADAPTER	Adapter,
-	IN u8			Band
+		PADAPTER	Adapter,
+		u8			Band
 )
 {
 	HAL_DATA_TYPE	*pHalData	= GET_HAL_DATA(Adapter);
@@ -1461,8 +1370,8 @@ PHY_SwitchWirelessBand8812(
 
 BOOLEAN
 phy_SwBand8812(
-	IN	PADAPTER	pAdapter,
-	IN	u8			channelToSW
+		PADAPTER	pAdapter,
+		u8			channelToSW
 )
 {
 	u8			u1Btmp;
@@ -1483,14 +1392,15 @@ phy_SwBand8812(
 
 	if (BandToSW != Band)
 		PHY_SwitchWirelessBand8812(pAdapter, BandToSW);
+	else
+		GET_HAL_DATA(pAdapter)->current_band_type = (BAND_TYPE)BandToSW;
 
 	return ret_value;
 }
 
-#pragma clang optimize off
 u8
 phy_GetSecondaryChnl_8812(
-	IN	PADAPTER	Adapter
+		PADAPTER	Adapter
 )
 {
 	u8					SCSettingOf40 = 0, SCSettingOf20 = 0;
@@ -1529,11 +1439,10 @@ phy_GetSecondaryChnl_8812(
 	/*RTW_INFO("SCMapping: SC Value %x\n", ((SCSettingOf40 << 4) | SCSettingOf20));*/
 	return (SCSettingOf40 << 4) | SCSettingOf20;
 }
-#pragma clang optimize on
 
-VOID
+void
 phy_SetRegBW_8812(
-	IN	PADAPTER		Adapter,
+		PADAPTER		Adapter,
 	enum channel_width	CurrentBW
 )
 {
@@ -1564,9 +1473,9 @@ phy_SetRegBW_8812(
 
 void
 phy_FixSpur_8812A(
-	IN	PADAPTER	        pAdapter,
-	IN  enum channel_width    Bandwidth,
-	IN  u1Byte			    Channel
+		PADAPTER	pAdapter,
+		enum channel_width	Bandwidth,
+		u8				Channel
 )
 {
 	/* C cut Item12 ADC FIFO CLOCK */
@@ -1605,9 +1514,9 @@ phy_FixSpur_8812A(
 
 }
 
-VOID
+void
 phy_PostSetBwMode8812(
-	IN	PADAPTER	Adapter
+		PADAPTER	Adapter
 )
 {
 	u8			SubChnlNum = 0;
@@ -1699,8 +1608,8 @@ phy_PostSetBwMode8812(
 }
 
 /* <20130207, Kordan> The variales initialized here are used in odm_LNAPowerControl(). */
-VOID phy_InitRssiTRSW(
-	IN	PADAPTER					pAdapter
+void phy_InitRssiTRSW(
+		PADAPTER					pAdapter
 )
 {
 	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(pAdapter);
@@ -1722,11 +1631,11 @@ VOID phy_InitRssiTRSW(
 }
 
 /*Referenced from "WB-20130801-YN-RL6286 Settings for Spur Issues R02.xls"*/
-VOID
+void
 phy_SpurCalibration_8812A(
-	IN	PADAPTER	pAdapter,
-	IN	u8			Channel,
-	IN	u8			Bandwidth
+		PADAPTER	pAdapter,
+		u8			Channel,
+		u8			Bandwidth
 )
 {
 
@@ -1769,13 +1678,14 @@ phy_SpurCalibration_8812A(
 
 }
 
-VOID
+void
 phy_SwChnl8812(
-	IN	PADAPTER	pAdapter
+		PADAPTER	pAdapter
 )
 {
 	enum rf_path	eRFPath = RF_PATH_A;
 	HAL_DATA_TYPE	*pHalData = GET_HAL_DATA(pAdapter);
+	struct hal_spec_t *hal_spec = GET_HAL_SPEC(pAdapter);
 	u8	channelToSW = pHalData->current_channel;
 	u8	bandwidthToSw = pHalData->current_channel_bw;
 
@@ -1807,7 +1717,7 @@ phy_SwChnl8812(
 	else
 		phy_set_bb_reg(pAdapter, rFc_area_Jaguar, 0x1ffe0000, 0x96a);
 
-	for (eRFPath = 0; eRFPath < pHalData->NumTotalRFPath; eRFPath++) {
+	for (eRFPath = 0; eRFPath < hal_spec->rf_reg_path_num; eRFPath++) {
 		/* RF_MOD_AG */
 		if (36 <= channelToSW && channelToSW <= 64)
 			phy_set_rf_reg(pAdapter, eRFPath, RF_CHNLBW_Jaguar, BIT18 | BIT17 | BIT16 | BIT9 | BIT8, 0x101); /* 5'b00101); */
@@ -1857,9 +1767,9 @@ phy_SwChnl8812(
 		phy_SpurCalibration_8812A(pAdapter, channelToSW, bandwidthToSw);
 }
 
-VOID
+void
 phy_SwChnlAndSetBwMode8812(
-	IN  PADAPTER		Adapter
+		PADAPTER		Adapter
 )
 {
 	HAL_DATA_TYPE		*pHalData = GET_HAL_DATA(Adapter);
@@ -1889,7 +1799,7 @@ phy_SwChnlAndSetBwMode8812(
 	}
 
 	odm_clear_txpowertracking_state(&pHalData->odmpriv);
-	PHY_SetTxPowerLevel8812(Adapter, pHalData->current_channel);
+	rtw_hal_set_tx_power_level(Adapter, pHalData->current_channel);
 
 	if (IS_HARDWARE_TYPE_8812(Adapter))
 		phy_InitRssiTRSW(Adapter);
@@ -1914,16 +1824,16 @@ phy_SwChnlAndSetBwMode8812(
 	}
 }
 
-VOID
+void
 PHY_HandleSwChnlAndSetBW8812(
-	IN	PADAPTER			Adapter,
-	IN	BOOLEAN				bSwitchChannel,
-	IN	BOOLEAN				bSetBandWidth,
-	IN	u8					ChannelNum,
-	IN	enum channel_width		ChnlWidth,
-	IN	u8					ChnlOffsetOf40MHz,
-	IN	u8					ChnlOffsetOf80MHz,
-	IN	u8					CenterFrequencyIndex1
+		PADAPTER			Adapter,
+		BOOLEAN				bSwitchChannel,
+		BOOLEAN				bSetBandWidth,
+		u8					ChannelNum,
+		enum channel_width		ChnlWidth,
+		u8					ChnlOffsetOf40MHz,
+		u8					ChnlOffsetOf80MHz,
+		u8					CenterFrequencyIndex1
 )
 {
 	PADAPTER			pDefAdapter =  GetDefaultAdapter(Adapter);
@@ -2024,13 +1934,13 @@ PHY_HandleSwChnlAndSetBW8812(
 
 }
 
-VOID
+void
 PHY_SetSwChnlBWMode8812(
-	IN	PADAPTER			Adapter,
-	IN	u8					channel,
-	IN	enum channel_width	Bandwidth,
-	IN	u8					Offset40,
-	IN	u8					Offset80
+		PADAPTER			Adapter,
+		u8					channel,
+		enum channel_width	Bandwidth,
+		u8					Offset40,
+		u8					Offset80
 )
 {
 	/* RTW_INFO("%s()===>\n",__FUNCTION__); */

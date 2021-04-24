@@ -861,12 +861,10 @@ static int rockchip_pm_add_one_domain(struct rockchip_pmu *pmu,
 	pd->genpd.power_on = rockchip_pd_power_on;
 	pd->genpd.attach_dev = rockchip_pd_attach_dev;
 	pd->genpd.detach_dev = rockchip_pd_detach_dev;
-	pd->genpd.flags = GENPD_FLAG_PM_CLK;
 	if (pd_info->active_wakeup)
 		pd->genpd.flags |= GENPD_FLAG_ACTIVE_WAKEUP;
 #ifndef MODULE
 	if (pd_info->keepon_startup) {
-		pd->genpd.flags &= (~GENPD_FLAG_PM_CLK);
 		pd->genpd.flags |= GENPD_FLAG_ALWAYS_ON;
 		if (!rockchip_pmu_domain_is_on(pd)) {
 			error = rockchip_pd_power(pd, true);
@@ -1023,7 +1021,6 @@ static void rockchip_pd_keepon_do_release(struct generic_pm_domain *genpd,
 	int enable_count;
 
 	pd->genpd.flags &= (~GENPD_FLAG_ALWAYS_ON);
-	pd->genpd.flags |= GENPD_FLAG_PM_CLK;
 	list_for_each_entry(pm_data, &genpd->dev_list, list_node) {
 		if (!atomic_read(&pm_data->dev->power.usage_count)) {
 			enable_count = 0;
@@ -1334,8 +1331,8 @@ static const struct rockchip_domain_info rk3568_pm_domains[] = {
 	[RK3568_PD_VO]		= DOMAIN_RK3568_PROTECT(BIT(7),  BIT(4), false),
 	[RK3568_PD_RGA]		= DOMAIN_RK3568(BIT(5),  BIT(5), false),
 	[RK3568_PD_VPU]		= DOMAIN_RK3568(BIT(2), BIT(6), false),
-	[RK3568_PD_RKVDEC]	= DOMAIN_RK3568(BIT(4), BIT(7), false),
-	[RK3568_PD_RKVENC]	= DOMAIN_RK3568(BIT(3), BIT(8), false),
+	[RK3568_PD_RKVDEC]	= DOMAIN_RK3568(BIT(4), BIT(8), false),
+	[RK3568_PD_RKVENC]	= DOMAIN_RK3568(BIT(3), BIT(7), false),
 	[RK3568_PD_PIPE]	= DOMAIN_RK3568(BIT(8), BIT(11), false),
 };
 

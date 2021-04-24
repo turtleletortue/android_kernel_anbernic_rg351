@@ -53,6 +53,9 @@
 #define RK3288_LVDS_CON_CLKINV(x)	HIWORD_UPDATE(x,  8,  8)
 #define RK3288_LVDS_CON_TTL_EN(x)	HIWORD_UPDATE(x,  6,  6)
 
+#define RK3568_GRF_VO_CON1		0X0364
+#define RK3568_RGB_DATA_BYPASS(v)	HIWORD_UPDATE(v, 6, 6)
+
 struct rockchip_rgb;
 
 struct rockchip_rgb_funcs {
@@ -182,26 +185,39 @@ rockchip_rgb_encoder_atomic_check(struct drm_encoder *encoder,
 	switch (s->bus_format) {
 	case MEDIA_BUS_FMT_RGB666_1X18:
 		s->output_mode = ROCKCHIP_OUT_MODE_P666;
+		s->output_if = VOP_OUTPUT_IF_RGB;
 		break;
 	case MEDIA_BUS_FMT_RGB565_1X16:
 		s->output_mode = ROCKCHIP_OUT_MODE_P565;
+		s->output_if = VOP_OUTPUT_IF_RGB;
 		break;
 	case MEDIA_BUS_FMT_SRGB888_3X8:
 		s->output_mode = ROCKCHIP_OUT_MODE_S888;
+		s->output_if = VOP_OUTPUT_IF_RGB;
 		break;
 	case MEDIA_BUS_FMT_SRGB888_DUMMY_4X8:
 		s->output_mode = ROCKCHIP_OUT_MODE_S888_DUMMY;
+		s->output_if = VOP_OUTPUT_IF_RGB;
 		break;
 	case MEDIA_BUS_FMT_YUYV8_2X8:
+	case MEDIA_BUS_FMT_YVYU8_2X8:
+	case MEDIA_BUS_FMT_UYVY8_2X8:
+	case MEDIA_BUS_FMT_VYUY8_2X8:
 		s->output_mode = ROCKCHIP_OUT_MODE_BT656;
+		s->output_if = VOP_OUTPUT_IF_BT656;
 		break;
 	case MEDIA_BUS_FMT_YUYV8_1X16:
+	case MEDIA_BUS_FMT_YVYU8_1X16:
+	case MEDIA_BUS_FMT_UYVY8_1X16:
+	case MEDIA_BUS_FMT_VYUY8_1X16:
 		s->output_mode = ROCKCHIP_OUT_MODE_BT1120;
+		s->output_if = VOP_OUTPUT_IF_BT1120;
 		break;
 	case MEDIA_BUS_FMT_RGB888_1X24:
 	case MEDIA_BUS_FMT_RGB666_1X24_CPADHI:
 	default:
 		s->output_mode = ROCKCHIP_OUT_MODE_P888;
+		s->output_if = VOP_OUTPUT_IF_RGB;
 		break;
 	}
 
@@ -267,6 +283,7 @@ static int rockchip_rgb_bind(struct device *dev, struct device *master,
 
 	if (rgb->panel) {
 		connector = &rgb->connector;
+		connector->interlace_allowed = true;
 		ret = drm_connector_init(drm_dev, connector,
 					 &rockchip_rgb_connector_funcs,
 					 DRM_MODE_CONNECTOR_DPI);
@@ -425,6 +442,16 @@ static const struct rockchip_rgb_funcs rk3288_rgb_funcs = {
 	.disable = rk3288_rgb_disable,
 };
 
+static void rk3568_rgb_enable(struct rockchip_rgb *rgb)
+{
+	regmap_write(rgb->grf, RK3568_GRF_VO_CON1,
+		     RK3568_RGB_DATA_BYPASS(rgb->data_sync_bypass));
+}
+
+static const struct rockchip_rgb_funcs rk3568_rgb_funcs = {
+	.enable = rk3568_rgb_enable,
+};
+
 static void rv1126_rgb_enable(struct rockchip_rgb *rgb)
 {
 	regmap_write(rgb->grf, RV1126_GRF_IOFUNC_CON3,
@@ -443,6 +470,7 @@ static const struct of_device_id rockchip_rgb_dt_ids[] = {
 	{ .compatible = "rockchip,rk3288-rgb", .data = &rk3288_rgb_funcs },
 	{ .compatible = "rockchip,rk3308-rgb", },
 	{ .compatible = "rockchip,rk3368-rgb", },
+	{ .compatible = "rockchip,rk3568-rgb", .data = &rk3568_rgb_funcs },
 	{ .compatible = "rockchip,rv1108-rgb", },
 	{ .compatible = "rockchip,rv1126-rgb", .data = &rv1126_rgb_funcs},
 	{}

@@ -11,6 +11,7 @@
  * v1.0x01.0x03 update frame rate from 25fps to 30fps
  * v1.0x01.0x04 update max exposure and formula
  *	shs1 = vts - (line + 1)
+ * V0.0X01.0X05 add quick stream on/off
  */
 
 #include <linux/clk.h>
@@ -35,7 +36,7 @@
 #include <linux/pinctrl/consumer.h>
 #include <linux/rk-preisp.h>
 
-#define DRIVER_VERSION			KERNEL_VERSION(0, 0x01, 0x04)
+#define DRIVER_VERSION			KERNEL_VERSION(0, 0x01, 0x05)
 #ifndef V4L2_CID_DIGITAL_GAIN
 #define V4L2_CID_DIGITAL_GAIN		V4L2_CID_GAIN
 #endif
@@ -205,7 +206,7 @@ static const struct regval imx307_global_regs[] = {
  * max_framerate 30fps
  * lvds_datarate per lane 222.75Mbps 4 lane
  */
-static const struct regval imx307_linear_1920x1080_lvds_regs[] = {
+static const struct regval imx307_linear_1920x1080_30fps_lvds_regs[] = {
 	{0x3003, 0x01},
 	{REG_DELAY, 0x10},
 	{0x3000, 0x01},
@@ -221,6 +222,48 @@ static const struct regval imx307_linear_1920x1080_lvds_regs[] = {
 	{0x3019, 0x04},
 	{0x301c, 0x30},
 	{0x301d, 0x11},
+	{0x3046, 0xe0},
+	{0x304b, 0x0a},
+	{0x305c, 0x18},
+	{0x305d, 0x00},
+	{0x305e, 0x20},
+	{0x305f, 0x01},
+	{0x309e, 0x4a},
+	{0x309f, 0x4a},
+	{0x311c, 0x0e},
+	{0x3128, 0x04},
+	{0x3129, 0x1d},
+	{0x313b, 0x41},
+	{0x315e, 0x1a},
+	{0x3164, 0x1a},
+	{0x317c, 0x12},
+	{0x31ec, 0x37},
+	{0x3480, 0x49},
+	{0x3002, 0x00},
+	{REG_NULL, 0x00},
+};
+
+/*
+ * Xclk 37.125Mhz
+ * max_framerate 60fps
+ * lvds_datarate per lane 445.5Mbps 4 lane
+ */
+static const struct regval imx307_linear_1920x1080_60fps_lvds_regs[] = {
+	{0x3003, 0x01},
+	{REG_DELAY, 0x10},
+	{0x3000, 0x01},
+	{0x3001, 0x00},
+	{0x3002, 0x01},
+	{0x3005, 0x00},
+	{0x3007, 0x00},
+	{0x3009, 0x01},
+	{0x300a, 0x3c},
+	{0x3010, 0x21},
+	{0x3011, 0x0a},
+	{0x3018, 0x65},
+	{0x3019, 0x04},
+	{0x301c, 0x98},
+	{0x301d, 0x08},
 	{0x3046, 0xe0},
 	{0x304b, 0x0a},
 	{0x305c, 0x18},
@@ -491,12 +534,12 @@ static const struct imx307_mode lvds_supported_modes[] = {
 		.height = 1110,
 		.max_fps = {
 			.numerator = 10000,
-			.denominator = 300000,
+			.denominator = 600000,
 		},
 		.exp_def = 0x03fe,
-		.hts_def = 0x1130,
+		.hts_def = 0x0889,
 		.vts_def = 0x0465,
-		.reg_list = imx307_linear_1920x1080_lvds_regs,
+		.reg_list = imx307_linear_1920x1080_60fps_lvds_regs,
 		.hdr_mode = NO_HDR,
 		.lvds_cfg = {
 			.mode = LS_FIRST,
@@ -514,6 +557,35 @@ static const struct imx307_mode lvds_supported_modes[] = {
 			},
 		},
 	}, {
+		.bus_fmt = MEDIA_BUS_FMT_SRGGB10_1X10,
+		.width = 1948,
+		.height = 1110,
+		.max_fps = {
+			.numerator = 10000,
+			.denominator = 300000,
+		},
+		.exp_def = 0x03fe,
+		.hts_def = 0x1130,
+		.vts_def = 0x0465,
+		.reg_list = imx307_linear_1920x1080_30fps_lvds_regs,
+		.hdr_mode = NO_HDR,
+		.lvds_cfg = {
+			.mode = LS_FIRST,
+			.frm_sync_code[LVDS_CODE_GRP_LINEAR] = {
+				.odd_sync_code = {
+					.act = {
+						.sav = 0x200,
+						.eav = 0x274,
+					},
+					.blk = {
+						.sav = 0x2ac,
+						.eav = 0x2d8,
+					},
+				},
+			},
+		},
+	},
+	{
 		.bus_fmt = MEDIA_BUS_FMT_SRGGB10_1X10,
 		.width = 1948,
 		.height = 1098,
@@ -1116,6 +1188,7 @@ static long imx307_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	long ret = 0;
 	s64 dst_pixel_rate = 0;
 	s32 dst_link_freq = 0;
+	u32 stream = 0;
 
 	switch (cmd) {
 	case RKMODULE_GET_MODULE_INFO:
@@ -1177,6 +1250,21 @@ static long imx307_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 		else
 			ret = -ENOIOCTLCMD;
 		break;
+	case RKMODULE_SET_QUICK_STREAM:
+
+		stream = *((u32 *)arg);
+
+		if (stream)
+			ret = imx307_write_reg(imx307->client,
+					       IMX307_REG_CTRL_MODE,
+					       IMX307_REG_VALUE_08BIT,
+					       0);
+		else
+			ret = imx307_write_reg(imx307->client,
+					       IMX307_REG_CTRL_MODE,
+					       IMX307_REG_VALUE_08BIT,
+					       1);
+		break;
 	default:
 		ret = -ENOIOCTLCMD;
 		break;
@@ -1195,6 +1283,7 @@ static long imx307_compat_ioctl32(struct v4l2_subdev *sd,
 	struct preisp_hdrae_exp_s *hdrae;
 	long ret;
 	u32 cg = 0;
+	u32 stream = 0;
 
 	switch (cmd) {
 	case RKMODULE_GET_MODULE_INFO:
@@ -1260,6 +1349,11 @@ static long imx307_compat_ioctl32(struct v4l2_subdev *sd,
 		ret = copy_from_user(&cg, up, sizeof(cg));
 		if (!ret)
 			ret = imx307_ioctl(sd, cmd, &cg);
+		break;
+	case RKMODULE_SET_QUICK_STREAM:
+		ret = copy_from_user(&stream, up, sizeof(u32));
+		if (!ret)
+			ret = imx307_ioctl(sd, cmd, &stream);
 		break;
 	default:
 		ret = -ENOIOCTLCMD;
@@ -1642,7 +1736,7 @@ static int imx307_set_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	}
 
-	if (pm_runtime_get(&client->dev) <= 0)
+	if (!pm_runtime_get_if_in_use(&client->dev))
 		return 0;
 
 	switch (ctrl->id) {

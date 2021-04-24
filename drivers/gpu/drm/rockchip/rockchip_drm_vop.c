@@ -22,7 +22,7 @@
 #ifdef CONFIG_DRM_ANALOGIX_DP
 #include <drm/bridge/analogix_dp.h>
 #endif
-#include <dt-bindings/clock/rk_system_status.h>
+#include <dt-bindings/soc/rockchip-system-status.h>
 
 #include <linux/debugfs.h>
 #include <linux/fixp-arith.h>
@@ -601,13 +601,30 @@ static bool is_uv_swap(uint32_t bus_format, uint32_t output_mode)
 	 *
 	 * From H/W testing, YUV444 mode need a rb swap.
 	 */
-	if ((bus_format == MEDIA_BUS_FMT_YUV8_1X24 ||
-	     bus_format == MEDIA_BUS_FMT_YUV10_1X30) &&
-	    (output_mode == ROCKCHIP_OUT_MODE_AAAA ||
-	     output_mode == ROCKCHIP_OUT_MODE_P888))
+	if (bus_format == MEDIA_BUS_FMT_YVYU8_1X16 ||
+	    bus_format == MEDIA_BUS_FMT_VYUY8_1X16 ||
+	    bus_format == MEDIA_BUS_FMT_YVYU8_2X8 ||
+	    bus_format == MEDIA_BUS_FMT_VYUY8_2X8 ||
+	    ((bus_format == MEDIA_BUS_FMT_YUV8_1X24 ||
+	      bus_format == MEDIA_BUS_FMT_YUV10_1X30) &&
+	     (output_mode == ROCKCHIP_OUT_MODE_AAAA ||
+	      output_mode == ROCKCHIP_OUT_MODE_P888)))
 		return true;
 	else
 		return false;
+}
+
+static bool is_yc_swap(uint32_t bus_format)
+{
+	switch (bus_format) {
+	case MEDIA_BUS_FMT_YUYV8_1X16:
+	case MEDIA_BUS_FMT_YVYU8_1X16:
+	case MEDIA_BUS_FMT_YUYV8_2X8:
+	case MEDIA_BUS_FMT_YVYU8_2X8:
+		return true;
+	default:
+		return false;
+	}
 }
 
 static bool is_yuv_output(uint32_t bus_format)
@@ -618,7 +635,13 @@ static bool is_yuv_output(uint32_t bus_format)
 	case MEDIA_BUS_FMT_UYYVYY8_0_5X24:
 	case MEDIA_BUS_FMT_UYYVYY10_0_5X30:
 	case MEDIA_BUS_FMT_YUYV8_2X8:
+	case MEDIA_BUS_FMT_YVYU8_2X8:
+	case MEDIA_BUS_FMT_UYVY8_2X8:
+	case MEDIA_BUS_FMT_VYUY8_2X8:
 	case MEDIA_BUS_FMT_YUYV8_1X16:
+	case MEDIA_BUS_FMT_YVYU8_1X16:
+	case MEDIA_BUS_FMT_UYVY8_1X16:
+	case MEDIA_BUS_FMT_VYUY8_1X16:
 		return true;
 	default:
 		return false;
@@ -2886,7 +2909,7 @@ static void vop_crtc_atomic_enable(struct drm_crtc *crtc,
 	int act_end;
 	bool interlaced = !!(adjusted_mode->flags & DRM_MODE_FLAG_INTERLACE);
 	int for_ddr_freq = 0;
-	bool dclk_inv;
+	bool dclk_inv, yc_swap = false;
 
 	rockchip_set_system_status(sys_status);
 	vop_lock(vop);
@@ -2933,10 +2956,10 @@ static void vop_crtc_atomic_enable(struct drm_crtc *crtc,
 		VOP_CTRL_SET(vop, lvds_pin_pol, val);
 		VOP_CTRL_SET(vop, lvds_dclk_pol, dclk_inv);
 		VOP_GRF_SET(vop, grf_dclk_inv, dclk_inv);
-
-		if (s->bus_format == MEDIA_BUS_FMT_YUYV8_1X16) {
+		if (s->output_if & VOP_OUTPUT_IF_BT1120) {
 			VOP_CTRL_SET(vop, bt1120_en, 1);
-			VOP_CTRL_SET(vop, bt1120_yc_swap, 1);
+			yc_swap = is_yc_swap(s->bus_format);
+			VOP_CTRL_SET(vop, bt1120_yc_swap, yc_swap);
 		}
 		break;
 	case DRM_MODE_CONNECTOR_eDP:

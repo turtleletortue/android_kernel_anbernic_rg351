@@ -372,4 +372,8 @@ config JOYSTICK_ODROIDGO2
 	help
 	  Made for ODROIDGO2-Advance.
 
+config JOYSTICK_ODROIDGO3
+	tristate "ODROIDGO3 joypad driver"
+	help
+	  Made for ODROIDGO3.
 endif

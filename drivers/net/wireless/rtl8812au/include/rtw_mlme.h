@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2007 - 2017 Realtek Corporation.
+ * Copyright(c) 2007 - 2019 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -23,47 +23,43 @@
 
 /*	Commented by Albert 20101105
  *	Increase the scanning timeout because of increasing the SURVEY_TO value. */
-
-
-#ifdef PALTFORM_OS_WINCE
-#define	SCANQUEUE_LIFETIME 12000000 /* unit:us */
-#else
 #define	SCANQUEUE_LIFETIME 20000 /* 20sec, unit:msec */
-#endif
 
-#define WIFI_NULL_STATE					0x00000000
-#define WIFI_ASOC_STATE					0x00000001 /* Linked */
-#define WIFI_REASOC_STATE				0x00000002
-#define WIFI_SLEEP_STATE				0x00000004
-#define WIFI_STATION_STATE				0x00000008
-#define WIFI_AP_STATE					0x00000010
-#define WIFI_ADHOC_STATE				0x00000020
-#define WIFI_ADHOC_MASTER_STATE			0x00000040
-#define WIFI_UNDER_LINKING				0x00000080
-#define WIFI_UNDER_WPS					0x00000100
-#define WIFI_MESH_STATE					0x00000200
+/*pmlmepriv->fw_state*/
+#define WIFI_NULL_STATE				0x00000000
+#define WIFI_ASOC_STATE				0x00000001 /* Linked */
+#define WIFI_REASOC_STATE			0x00000002
+#define WIFI_SLEEP_STATE			0x00000004
+#define WIFI_STATION_STATE			0x00000008
+#define WIFI_AP_STATE				0x00000010
+#define WIFI_ADHOC_STATE			0x00000020
+#define WIFI_ADHOC_MASTER_STATE		0x00000040
+#define WIFI_UNDER_LINKING			0x00000080
+#define WIFI_UNDER_WPS				0x00000100
+#define WIFI_MESH_STATE				0x00000200
 #define WIFI_STA_ALIVE_CHK_STATE		0x00000400
-#define WIFI_SITE_MONITOR				0x00000800 /* under site surveying */
-#define WIFI_WDS						0x00001000
-#define WIFI_WDS_RX_BEACON				0x00002000 /* already rx WDS AP beacon */
-#define WIFI_AUTOCONF					0x00004000
-#define WIFI_AUTOCONF_IND				0x00008000
-#define WIFI_MP_STATE					0x00010000
-#define WIFI_MP_CTX_BACKGROUND			0x00020000 /* in continuous tx background */
-#define WIFI_MP_CTX_ST					0x00040000 /* in continuous tx with single-tone */
-#define WIFI_MP_CTX_BACKGROUND_PENDING	0x00080000 /* pending in continuous tx background due to out of skb */
-#define WIFI_MP_CTX_CCK_HW				0x00100000 /* in continuous tx */
-#define WIFI_MP_CTX_CCK_CS				0x00200000 /* in continuous tx with carrier suppression */
-#define WIFI_MP_LPBK_STATE				0x00400000
+#define WIFI_UNDER_SURVEY			0x00000800 /* under site surveying */
+/*#define WIFI_UNDEFINED_STATE			0x00001000*/
+/*#define WIFI_UNDEFINED_STATE			0x00002000*/
+/*#define WIFI_UNDEFINED_STATE			0x00004000*/
+/*#define WIFI_UNDEFINED_STATE			0x00008000*/
+#define WIFI_MP_STATE				0x00010000
+/*#define WIFI_UNDEFINED_STATE			0x00020000*/
+/*#define WIFI_UNDEFINED_STATE			0x00040000*/
+/*#define WIFI_UNDEFINED_STATE			0x00080000*/
+/*#define WIFI_UNDEFINED_STATE			0x00100000*/
+/*#define WIFI_UNDEFINED_STATE			0x00200000*/ 
+/*#define WIFI_UNDEFINED_STATE			0x00400000*/
 #define WIFI_OP_CH_SWITCHING			0x00800000
-#define WIFI_UNDER_KEY_HANDSHAKE	0x01000000
+#define WIFI_UNDER_KEY_HANDSHAKE		0x01000000
 /*#define WIFI_UNDEFINED_STATE			0x02000000*/
 /*#define WIFI_UNDEFINED_STATE			0x04000000*/
 /*#define WIFI_UNDEFINED_STATE			0x08000000*/
 /*#define WIFI_UNDEFINED_STATE			0x10000000*/
 /*#define WIFI_UNDEFINED_STATE			0x20000000*/
 /*#define WIFI_UNDEFINED_STATE			0x40000000*/
-#define WIFI_MONITOR_STATE				0x80000000
+#define WIFI_MONITOR_STATE			0x80000000
+
 
 #define MIRACAST_DISABLED	0
 #define MIRACAST_SOURCE		BIT0
@@ -101,7 +97,7 @@ void rtw_wfd_st_switch(struct sta_info *sta, bool on);
 #define MLME_IS_MSRC(adapter) rtw_chk_miracast_mode((adapter), MIRACAST_SOURCE)
 #define MLME_IS_MSINK(adapter) rtw_chk_miracast_mode((adapter), MIRACAST_SINK)
 
-#define MLME_IS_SCAN(adapter) CHK_MLME_STATE(adapter, WIFI_SITE_MONITOR)
+#define MLME_IS_SCAN(adapter) CHK_MLME_STATE(adapter, WIFI_UNDER_SURVEY)
 #define MLME_IS_LINKING(adapter) CHK_MLME_STATE(adapter, WIFI_UNDER_LINKING)
 #define MLME_IS_ASOC(adapter) CHK_MLME_STATE(adapter, WIFI_ASOC_STATE)
 #define MLME_IS_OPCH_SW(adapter) CHK_MLME_STATE(adapter, WIFI_OP_CH_SWITCHING)
@@ -143,10 +139,10 @@ void rtw_wfd_st_switch(struct sta_info *sta, bool on);
 enum {
 	MLME_ACTION_UNKNOWN,
 	MLME_ACTION_NONE,
-	MLME_SCAN_ENABLE, /* WIFI_SITE_MONITOR */
-	MLME_SCAN_ENTER, /* WIFI_SITE_MONITOR && !SCAN_DISABLE && !SCAN_BACK_OP */
-	MLME_SCAN_DONE, /*  WIFI_SITE_MONITOR && (SCAN_DISABLE || SCAN_BACK_OP) */
-	MLME_SCAN_DISABLE, /* WIFI_SITE_MONITOR is going to be cleared */
+	MLME_SCAN_ENABLE, /* WIFI_UNDER_SURVEY */
+	MLME_SCAN_ENTER, /* WIFI_UNDER_SURVEY && !SCAN_DISABLE && !SCAN_BACK_OP */
+	MLME_SCAN_DONE, /*  WIFI_UNDER_SURVEY && (SCAN_DISABLE || SCAN_BACK_OP) */
+	MLME_SCAN_DISABLE, /* WIFI_UNDER_SURVEY is going to be cleared */
 	MLME_STA_CONNECTING,
 	MLME_STA_CONNECTED,
 	MLME_STA_DISCONNECTED,
@@ -161,11 +157,6 @@ enum {
 	MLME_OPCH_SWITCH,
 };
 
-#define _FW_UNDER_LINKING	WIFI_UNDER_LINKING
-#define _FW_LINKED			WIFI_ASOC_STATE
-#define _FW_UNDER_SURVEY	WIFI_SITE_MONITOR
-
-
 enum dot11AuthAlgrthmNum {
 	dot11AuthAlgrthm_Open = 0,
 	dot11AuthAlgrthm_Shared,
@@ -173,6 +164,39 @@ enum dot11AuthAlgrthmNum {
 	dot11AuthAlgrthm_Auto,
 	dot11AuthAlgrthm_WAPI,
 	dot11AuthAlgrthm_MaxNum
+};
+
+/**
+ * enum mlme_auth_type - AuthenticationType
+ *
+ * @MLME_AUTHTYPE_OPEN_SYSTEM: Open System authentication
+ * @MLME_AUTHTYPE_SHARED_KEY: Shared Key authentication (WEP only)
+ * @MLME_AUTHTYPE_FT: Fast BSS Transition (IEEE 802.11r)
+ * @MLME_AUTHTYPE_NETWORK_EAP: Network EAP (some Cisco APs and mainly LEAP)
+ * @MLME_AUTHTYPE_SAE: Simultaneous authentication of equals
+ * @MLME_AUTHTYPE_FILS_SK: Fast Initial Link Setup shared key
+ * @MLME_AUTHTYPE_FILS_SK_PFS: Fast Initial Link Setup shared key with PFS
+ * @MLME_AUTHTYPE_FILS_PK: Fast Initial Link Setup public key
+ * @__MLME_AUTHTYPE_NUM: internal
+ * @MLME_AUTHTYPE_MAX: maximum valid auth algorithm
+ * @MLME_AUTHTYPE_AUTOMATIC: determine automatically (if necessary by trying
+ *      multiple times); this is invalid in netlink -- leave out the attribute
+ *      for this on CONNECT commands.
+ */
+enum mlme_auth_type {
+	MLME_AUTHTYPE_OPEN_SYSTEM,
+	MLME_AUTHTYPE_SHARED_KEY,
+	MLME_AUTHTYPE_FT,
+	MLME_AUTHTYPE_NETWORK_EAP,
+	MLME_AUTHTYPE_SAE,
+	MLME_AUTHTYPE_FILS_SK,
+	MLME_AUTHTYPE_FILS_SK_PFS,
+	MLME_AUTHTYPE_FILS_PK,
+
+	/* keep last */
+	__MLME_AUTHTYPE_NUM,
+	MLME_AUTHTYPE_MAX = __MLME_AUTHTYPE_NUM - 1,
+	MLME_AUTHTYPE_AUTOMATIC
 };
 
 /* Scan type including active and passive scan. */
@@ -526,20 +550,6 @@ enum {
 	RTW_ROAM_ACTIVE = BIT2,
 };
 
-struct beacon_keys {
-	u8 ssid[IW_ESSID_MAX_SIZE];
-	u32 ssid_len;
-	u8 ch;
-	u8 bw;
-	u8 offset;
-	u8 proto_cap; /* PROTO_CAP_XXX */
-	u8 rate_set[12];
-	u8 rate_num;
-	int encryp_protocol;
-	int pairwise_cipher;
-	int group_cipher;
-	u32 akm;
-};
 #ifdef CONFIG_RTW_80211R
 #define RTW_FT_ACTION_REQ_LMT	4
 #define RTW_FT_MAX_IE_SZ	256
@@ -767,6 +777,9 @@ struct mlme_priv {
 	bool need_to_roam;
 #endif
 
+	u32 defs_lmt_sta;
+	u32 defs_lmt_time;
+
 	u8	*nic_hdl;
 	u32	max_bss_cnt;		/*	The size of scan queue	*/
 	_list		*pscanned;
@@ -777,6 +790,7 @@ struct mlme_priv {
 
 	NDIS_802_11_SSID	assoc_ssid;
 	u8	assoc_bssid[6];
+	u16	assoc_ch;		/* 0 reserved for no specific channel */
 
 	struct wlan_network	cur_network;
 	struct wlan_network *cur_network_scanned;
@@ -842,14 +856,6 @@ struct mlme_priv {
 #ifdef ROKU_PRIVATE
 	struct ht_priv_infra_ap htpriv_infra_ap;
 #endif /* ROKU_PRIVATE */
-
-#ifdef CONFIG_BEAMFORMING
-#ifndef RTW_BEAMFORMING_VERSION_2
-#if (BEAMFORMING_SUPPORT == 0)/*for driver beamforming*/
-	struct beamforming_info	beamforming_info;
-#endif
-#endif /* !RTW_BEAMFORMING_VERSION_2 */
-#endif
 
 #ifdef CONFIG_RTW_80211R
 	struct ft_roam_info ft_roam;
@@ -954,6 +960,8 @@ struct mlme_priv {
 	#ifdef CONFIG_80211AC_VHT
 	u8 ori_vht_en;
 	#endif
+
+	u8 ap_isolate;
 #endif /* #if defined (CONFIG_AP_MODE) && defined (CONFIG_NATIVEAP_MLME) */
 
 #if defined(CONFIG_WFD) && defined(CONFIG_IOCTL_CFG80211)
@@ -982,33 +990,10 @@ struct mlme_priv {
 	_workitem	Linkdown_workitem;
 #endif
 
-#ifdef CONFIG_INTEL_WIDI
-	int	widi_state;
-	int	listen_state;
-	_timer	listen_timer;
-	ATOMIC_T	rx_probe_rsp; /* 1:receive probe respone from RDS source. */
-	u8	*l2sdTaBuffer;
-	u8	channel_idx;
-	u8	group_cnt;	/* In WiDi 3.5, they specified another scan algo. for WFD/RDS co-existed */
-	u8	sa_ext[L2SDTA_SERVICE_VE_LEN];
-
-	u8	widi_enable;
-	/**
-	 * For WiDi 4; upper layer would set
-	 * p2p_primary_device_type_category_id
-	 * p2p_primary_device_type_sub_category_id
-	 * p2p_secondary_device_type_category_id
-	 * p2p_secondary_device_type_sub_category_id
-	 */
-	u16	p2p_pdt_cid;
-	u16	p2p_pdt_scid;
-	u8	num_p2p_sdt;
-	u16	p2p_sdt_cid[MAX_NUM_P2P_SDT];
-	u16	p2p_sdt_scid[MAX_NUM_P2P_SDT];
-	u8	p2p_reject_disable;	/* When starting NL80211 wpa_supplicant/hostapd, it will call netdev_close */
-							/* such that it will cause p2p disabled. Use this flag to reject. */
-#endif /* CONFIG_INTEL_WIDI */
+#ifdef RTW_BUSY_DENY_SCAN
 	systime lastscantime;
+#endif
+
 #ifdef CONFIG_CONCURRENT_MODE
 	u8	scanning_via_buddy_intf;
 #endif
@@ -1064,8 +1049,6 @@ extern void rtw_stassoc_event_callback(_adapter *adapter, u8 *pbuf);
 extern void rtw_stadel_event_callback(_adapter *adapter, u8 *pbuf);
 void rtw_sta_mstatus_disc_rpt(_adapter *adapter, u8 mac_id);
 void rtw_sta_mstatus_report(_adapter *adapter);
-extern void rtw_atimdone_event_callback(_adapter *adapter, u8 *pbuf);
-extern void rtw_cpwm_event_callback(_adapter *adapter, u8 *pbuf);
 extern void rtw_wmm_event_callback(PADAPTER padapter, u8 *pbuf);
 #ifdef CONFIG_IEEE80211W
 void rtw_sta_timeout_event_callback(_adapter *adapter, u8 *pbuf);
@@ -1245,6 +1228,7 @@ enum {
 #ifdef DBG_LA_MODE
 	SS_DENY_LA_MODE,
 #endif
+	SS_DENY_ADAPTIVITY,
 };
 
 u8 _rtw_sitesurvey_condition_check(const char *caller, _adapter *adapter, bool check_sc_interval);
@@ -1301,7 +1285,7 @@ void	rtw_ht_use_default_setting(_adapter *padapter);
 void rtw_build_wmm_ie_ht(_adapter *padapter, u8 *out_ie, uint *pout_len);
 unsigned int rtw_restructure_ht_ie(_adapter *padapter, u8 *in_ie, u8 *out_ie, uint in_len, uint *pout_len, u8 channel);
 void rtw_update_ht_cap(_adapter *padapter, u8 *pie, uint ie_len, u8 channel);
-void rtw_issue_addbareq_cmd(_adapter *padapter, struct xmit_frame *pxmitframe);
+void rtw_issue_addbareq_cmd(_adapter *padapter, struct xmit_frame *pxmitframe, u8 issue_when_busy);
 void rtw_append_exented_cap(_adapter *padapter, u8 *out_ie, uint *pout_len);
 #endif
 
@@ -1358,12 +1342,6 @@ u8 rtw_sta_media_status_rpt_cmd(_adapter *adapter, struct sta_info *sta, bool co
 void rtw_sta_media_status_rpt_cmd_hdl(_adapter *adapter, struct sta_media_status_rpt_cmd_parm *parm);
 void rtw_sta_traffic_info(void *sel, _adapter *adapter);
 
-#ifdef CONFIG_INTEL_PROXIM
-void rtw_proxim_enable(_adapter *padapter);
-void rtw_proxim_disable(_adapter *padapter);
-void rtw_proxim_send_packet(_adapter *padapter, u8 *pbuf, u16 len, u8 m_rate);
-#endif /* CONFIG_INTEL_PROXIM */
-
 #define GET_ARP_HTYPE(_arp)	BE_BITS_TO_2BYTE(((u8 *)(_arp)) + 0, 0, 16)
 #define GET_ARP_PTYPE(_arp)	BE_BITS_TO_2BYTE(((u8 *)(_arp)) + 2, 0, 16)
 #define GET_ARP_HLEN(_arp)	BE_BITS_TO_1BYTE(((u8 *)(_arp)) + 4, 0, 8)
@@ -1407,6 +1385,8 @@ void dump_arp_pkt(void *sel, u8 *da, u8 *sa, u8 *arp, bool tx);
 
 #define GET_UDP_SRC(_udphdr)			BE_BITS_TO_2BYTE(((u8 *)(_udphdr)) + 0, 0, 16)
 #define GET_UDP_DST(_udphdr)			BE_BITS_TO_2BYTE(((u8 *)(_udphdr)) + 2, 0, 16)
+#define GET_UDP_SIG1(_udphdr)			BE_BITS_TO_1BYTE(((u8 *)(_udphdr)) + 8, 0, 8)
+#define GET_UDP_SIG2(_udphdr)			BE_BITS_TO_1BYTE(((u8 *)(_udphdr)) + 23, 0, 8)
 
 #define TCP_SRC(_tcphdr)				(((u8 *)(_tcphdr)) + 0)
 #define TCP_DST(_tcphdr)				(((u8 *)(_tcphdr)) + 2)

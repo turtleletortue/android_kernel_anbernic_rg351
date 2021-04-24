@@ -4,6 +4,7 @@
 #ifndef RK_VCM_HEAD_H
 #define RK_VCM_HEAD_H
 
+#define RK_VCM_HEAD_VERSION	KERNEL_VERSION(0, 0x01, 0x0)
 /*
  * Focus position values:
  * 65 logical positions ( 0 - 64 )
@@ -11,6 +12,7 @@
  */
 #define VCMDRV_MAX_LOG			64U
 
+#define OF_CAMERA_VCMDRV_MAX_CURRENT	"rockchip,vcm-max-current"
 #define OF_CAMERA_VCMDRV_START_CURRENT	"rockchip,vcm-start-current"
 #define OF_CAMERA_VCMDRV_RATED_CURRENT	"rockchip,vcm-rated-current"
 #define OF_CAMERA_VCMDRV_STEP_MODE	"rockchip,vcm-step-mode"
@@ -29,6 +31,13 @@
 	_IOR('V', BASE_VIDIOC_PRIVATE + 3, struct rk_cam_vcm_cfg)
 #define RK_VIDIOC_SET_VCM_CFG \
 	_IOW('V', BASE_VIDIOC_PRIVATE + 4, struct rk_cam_vcm_cfg)
+
+#define RK_VIDIOC_FOCUS_CORRECTION \
+	_IOR('V', BASE_VIDIOC_PRIVATE + 5, unsigned int)
+#define RK_VIDIOC_IRIS_CORRECTION \
+	_IOR('V', BASE_VIDIOC_PRIVATE + 6, unsigned int)
+#define RK_VIDIOC_ZOOM_CORRECTION \
+	_IOR('V', BASE_VIDIOC_PRIVATE + 7, unsigned int)
 
 #ifdef CONFIG_COMPAT
 #define RK_VIDIOC_COMPAT_VCM_TIMEINFO \

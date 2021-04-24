@@ -129,10 +129,10 @@ typedef struct esp_hw_idx_map {
 #define ESP_WL_FLAG_RFKILL                	BIT(0)
 #define ESP_WL_FLAG_HW_REGISTERED   		BIT(1)
 #define ESP_WL_FLAG_CONNECT              	BIT(2)
-#define ESP_WL_FLAG_STOP_TXQ          	BIT(3)
+#define ESP_WL_FLAG_STOP_TXQ          		BIT(3)
 
-#define ESP_PUB_MAX_VIF	2
-#define ESP_PUB_MAX_STA	4 //for one interface
+#define ESP_PUB_MAX_VIF		2
+#define ESP_PUB_MAX_STA		4 //for one interface
 #define ESP_PUB_MAX_RXAMPDU	8 //for all interfaces
 
 enum {

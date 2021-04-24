@@ -109,6 +109,15 @@
 		regulator-min-microvolt = <825000>;
 		regulator-max-microvolt = <825000>;
 	};
+
+	wireless_wlan: wireless-wlan {
+		compatible = "wlan-platdata";
+		rockchip,grf = <&grf>;
+		wifi_chip_type = "rtl8188fu";
+		WIFI,poweren_gpio = <&gpio0 RK_PC0 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
+
 };
 
 &csi_dphy0 {
@@ -154,7 +163,7 @@
 	assigned-clock-rates = <50000000>;
 
 	pinctrl-names = "default";
-	pinctrl-0 = <&rmiim0_pins &gmac_clk_m0_drv_level0_pins>;
+	pinctrl-0 = <&rmiim0_miim &rgmiim0_rxer &rmiim0_bus2 &rgmiim0_mclkinout_level0>;
 
 	phy-handle = <&phy>;
 	status = "okay";
@@ -301,5 +310,21 @@
 };
 
 &sfc {
+	status = "okay";
+};
+
+&u2phy_host {
+	status = "okay";
+};
+
+&u2phy1 {
+	status = "okay";
+};
+
+&usb_host0_ehci {
+	status = "okay";
+};
+
+&usb_host0_ohci {
 	status = "okay";
 };

@@ -412,7 +412,9 @@ struct mmc_host {
 
 	int			rescan_disable;	/* disable card detection */
 	int			rescan_entered;	/* used with nonremovable devices */
-
+	int			rescan_force;	/* force rescan of (nonremovable) devices */
+	int			rescan_keep_power; /* Do not power off card */
+	
 	int			need_retune;	/* re-tuning is needed */
 	int			hold_retune;	/* hold off re-tuning */
 	unsigned int		retune_period;	/* re-tuning period in secs */
@@ -502,6 +504,10 @@ static inline void *mmc_priv(struct mmc_host *host)
 #define mmc_hostname(x)	(dev_name(&(x)->class_dev))
 
 void mmc_detect_change(struct mmc_host *, unsigned long delay);
+/* HdG: HACK HACK HACK do not upstream */
+#define MMC_HAS_FORCE_DETECT_CHANGE
+void mmc_force_detect_change(struct mmc_host *host, unsigned long delay,
+			     bool keep_power);
 void mmc_request_done(struct mmc_host *, struct mmc_request *);
 void mmc_command_done(struct mmc_host *host, struct mmc_request *mrq);
 

@@ -124,5 +124,9 @@ config VIRT_WIFI
 
 source "drivers/net/wireless/esp8089/Kconfig"
 source "drivers/net/wireless/rtl8812au/Kconfig"
+source "drivers/net/wireless/rtl8814au/Kconfig"
+source "drivers/net/wireless/rtl8821au/Kconfig"
+source "drivers/net/wireless/rtl8821cu/Kconfig"
+source "drivers/net/wireless/rtl88x2bu/Kconfig"
 
 endif # WLAN

@@ -1737,7 +1737,7 @@ static bool rcu_accelerate_cbs(struct rcu_state *rsp, struct rcu_node *rnp,
 		return false;
 
 	/*
-	 * Callbacks are often registered with incomplete grace-period
+	 * Callbacks are often registered with incompl05149064ABete grace-period
 	 * information.  Something about the fact that getting exact
 	 * information requires acquiring a global lock...  RCU therefore
 	 * makes a conservative estimate of the grace period number at which
@@ -4177,7 +4177,7 @@ void __init rcu_init(void)
 	}
 
 	/* Create workqueue for expedited GPs and for Tree SRCU. */
-	rcu_gp_wq = alloc_workqueue("rcu_gp", WQ_MEM_RECLAIM, 0);
+ 	rcu_gp_wq = alloc_workqueue("rcu_gp", WQ_POWER_EFFICIENT | WQ_MEM_RECLAIM, 0);	
 	WARN_ON(!rcu_gp_wq);
 	rcu_par_gp_wq = alloc_workqueue("rcu_par_gp", WQ_MEM_RECLAIM, 0);
 	WARN_ON(!rcu_par_gp_wq);

@@ -713,6 +713,7 @@ static int setup_initial_state(struct drm_device *drm_dev,
 		if (ret)
 			goto error_conn;
 
+		mode->picture_aspect_ratio = HDMI_PICTURE_ASPECT_NONE;
 		ret = drm_atomic_set_mode_for_crtc(crtc_state, mode);
 		if (ret)
 			goto error_conn;
@@ -2156,6 +2157,7 @@ static int __init rockchip_drm_init(void)
 
 	num_rockchip_sub_drivers = 0;
 	ADD_ROCKCHIP_SUB_DRIVER(vop_platform_driver, CONFIG_DRM_ROCKCHIP);
+	ADD_ROCKCHIP_SUB_DRIVER(vop2_platform_driver, CONFIG_DRM_ROCKCHIP);
 	ADD_ROCKCHIP_SUB_DRIVER(rockchip_lvds_driver,
 				CONFIG_ROCKCHIP_LVDS);
 	ADD_ROCKCHIP_SUB_DRIVER(rockchip_dp_driver,

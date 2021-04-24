@@ -38,6 +38,13 @@ u8 RSN_CIPHER_SUITE_WEP40[] = { 0x00, 0x0f, 0xac, 1 };
 u8 RSN_CIPHER_SUITE_TKIP[] = { 0x00, 0x0f, 0xac, 2 };
 u8 RSN_CIPHER_SUITE_WRAP[] = { 0x00, 0x0f, 0xac, 3 };
 u8 RSN_CIPHER_SUITE_CCMP[] = { 0x00, 0x0f, 0xac, 4 };
+u8 RSN_CIPHER_SUITE_AES_128_CMAC[] = { 0x00, 0x0f, 0xac, 6 };
+u8 RSN_CIPHER_SUITE_GCMP[] = { 0x00, 0x0f, 0xac, 8 };
+u8 RSN_CIPHER_SUITE_GCMP_256[] = { 0x00, 0x0f, 0xac, 9 };
+u8 RSN_CIPHER_SUITE_CCMP_256[] = { 0x00, 0x0f, 0xac, 10 };
+u8 RSN_CIPHER_SUITE_BIP_GMAC_128[] = { 0x00, 0x0f, 0xac, 11 };
+u8 RSN_CIPHER_SUITE_BIP_GMAC_256[] = { 0x00, 0x0f, 0xac, 12 };
+u8 RSN_CIPHER_SUITE_BIP_CMAC_256[] = { 0x00, 0x0f, 0xac, 13 };
 u8 RSN_CIPHER_SUITE_WEP104[] = { 0x00, 0x0f, 0xac, 5 };
 
 u8 WLAN_AKM_8021X[] = {0x00, 0x0f, 0xac, 1};
@@ -59,14 +66,14 @@ u8 WLAN_AKM_FT_FILS_SHA384[] = {0x00, 0x0f, 0xac, 17};
  * for adhoc-master to generate ie and provide supported-rate to fw
  * ----------------------------------------------------------- */
 
-static u8	WIFI_CCKRATES[] = {
+u8	WIFI_CCKRATES[] = {
 	(IEEE80211_CCK_RATE_1MB | IEEE80211_BASIC_RATE_MASK),
 	(IEEE80211_CCK_RATE_2MB | IEEE80211_BASIC_RATE_MASK),
 	(IEEE80211_CCK_RATE_5MB | IEEE80211_BASIC_RATE_MASK),
 	(IEEE80211_CCK_RATE_11MB | IEEE80211_BASIC_RATE_MASK)
 };
 
-static u8	WIFI_OFDMRATES[] = {
+u8	WIFI_OFDMRATES[] = {
 	(IEEE80211_OFDM_RATE_6MB),
 	(IEEE80211_OFDM_RATE_9MB),
 	(IEEE80211_OFDM_RATE_12MB),
@@ -95,6 +102,34 @@ u8 mgn_rates_vht3ss[10] = {MGN_VHT3SS_MCS0, MGN_VHT3SS_MCS1, MGN_VHT3SS_MCS2, MG
 u8 mgn_rates_vht4ss[10] = {MGN_VHT4SS_MCS0, MGN_VHT4SS_MCS1, MGN_VHT4SS_MCS2, MGN_VHT4SS_MCS3, MGN_VHT4SS_MCS4
 	, MGN_VHT4SS_MCS5, MGN_VHT4SS_MCS6, MGN_VHT4SS_MCS7, MGN_VHT4SS_MCS8, MGN_VHT4SS_MCS9
 			  };
+
+RATE_SECTION mgn_rate_to_rs(enum MGN_RATE rate)
+{
+	RATE_SECTION rs = RATE_SECTION_NUM;
+
+	if (IS_CCK_RATE(rate))
+		rs = CCK;
+	else if (IS_OFDM_RATE(rate))
+		rs = OFDM;
+	else if (IS_HT1SS_RATE(rate))
+		rs = HT_1SS;
+	else if (IS_HT2SS_RATE(rate))
+		rs = HT_2SS;
+	else if (IS_HT3SS_RATE(rate))
+		rs = HT_3SS;
+	else if (IS_HT4SS_RATE(rate))
+		rs = HT_4SS;
+	else if (IS_VHT1SS_RATE(rate))
+		rs = VHT_1SS;
+	else if (IS_VHT2SS_RATE(rate))
+		rs = VHT_2SS;
+	else if (IS_VHT3SS_RATE(rate))
+		rs = VHT_3SS;
+	else if (IS_VHT4SS_RATE(rate))
+		rs = VHT_4SS;
+
+	return rs;
+}
 
 static const char *const _rate_section_str[] = {
 	"CCK",
@@ -408,52 +443,6 @@ exit:
 	return ret;
 }
 
- /* Returns:  remove size OR  _FAIL: not updated*/
-int rtw_remove_ie_g_rate(u8 *ie, uint *ie_len, uint offset, u8 eid)
-{
-	int ret = _FAIL;
-	u8 *tem_target_ie;
-	u8 *target_ie;
-	u32 target_ielen,temp_target_ielen,cck_rate_size,rm_size;
-	u8 *start;
-	uint search_len;
-	u8 *remain_ies;
-	uint remain_len;
-	if (!ie || !ie_len || *ie_len <= offset)
-		goto exit;
-
-	start = ie + offset;
-	search_len = *ie_len - offset;
-
-	while (1) {
-		tem_target_ie=rtw_get_ie(start,eid,&temp_target_ielen,search_len);
-		
-		/*if(tem_target_ie)
-			RTW_INFO("%s, tem_target_ie=%u\n", __FUNCTION__,*tem_target_ie);*/
-		if (tem_target_ie && temp_target_ielen) {
-			cck_rate_size = rtw_get_cckrate_size((tem_target_ie+2), temp_target_ielen);
-			rm_size = temp_target_ielen - cck_rate_size;
-			RTW_DBG("%s,cck_rate_size=%u rm_size=%u\n", __FUNCTION__, cck_rate_size, rm_size);
-			temp_target_ielen=temp_target_ielen + 2;/*org size of  Supposrted Rates(include id + length)*/
-			/*RTW_INFO("%s, temp_target_ielen=%u\n", __FUNCTION__,temp_target_ielen);*/
-			remain_ies = tem_target_ie + temp_target_ielen;
-			remain_len = search_len - (remain_ies - start);
-			target_ielen=cck_rate_size;/*discount g mode rate 6, 9 12,18Mbps,id , length*/
-			*(tem_target_ie+1)=target_ielen;/*set new length to Supposrted Rates*/
-			target_ie=tem_target_ie+target_ielen + 2;/*set target ie to address of rate 6Mbps */
-	
-			_rtw_memmove(target_ie, remain_ies, remain_len);
-			*ie_len = *ie_len - rm_size;
-			ret = rm_size;
-
-			start = target_ie;
-			search_len = remain_len;
-		} else
-			break;
-	}
-exit:
-	return ret;
-}
 void rtw_set_supported_rate(u8 *SupportedRates, uint mode)
 {
 
@@ -481,6 +470,71 @@ void rtw_set_supported_rate(u8 *SupportedRates, uint mode)
 		break;
 
 	}
+}
+
+void rtw_filter_suppport_rateie(WLAN_BSSID_EX *pbss_network, u8 keep)
+{
+	u8 i, idx = 0, new_rate[NDIS_802_11_LENGTH_RATES_EX], *p;
+	uint iscck, isofdm, ie_orilen = 0, remain_len;
+	u8 *remain_ies;
+
+	p = rtw_get_ie(pbss_network->IEs + _BEACON_IE_OFFSET_, _SUPPORTEDRATES_IE_, &ie_orilen, (pbss_network->IELength - _BEACON_IE_OFFSET_));
+	if (!p)
+		return;
+
+	_rtw_memset(new_rate, 0, NDIS_802_11_LENGTH_RATES_EX);
+	for (i=0; i < ie_orilen; i++) {
+		iscck = rtw_is_cck_rate(p[i+2]);
+		isofdm= rtw_is_ofdm_rate(p[i+2]);
+		if (((keep == CCK) && iscck)
+			|| ((keep == OFDM) && isofdm))
+			new_rate[idx++]= rtw_is_basic_rate_ofdm(p[i+2]) ? p[i+2]|IEEE80211_BASIC_RATE_MASK : p[i+2];
+	}
+	/*	update rate ie	*/
+	p[1] = idx;
+	_rtw_memcpy(p+2, new_rate, idx);
+	/*	update remain ie & IELength*/
+	remain_ies = p + 2 + ie_orilen;
+	remain_len = pbss_network->IELength - (remain_ies - pbss_network->IEs);
+	_rtw_memmove(p+2+idx, remain_ies, remain_len);
+	pbss_network->IELength -= (ie_orilen - idx);
+}
+ 
+
+/*
+	Adjust those items by given wireless_mode
+		1. pbss_network->IELength
+		2. pbss_network->IE (SUPPORTRATE & EXT_SUPPORTRATE)
+		3. pbss_network->SupportedRates
+*/
+
+u8 rtw_update_rate_bymode(WLAN_BSSID_EX *pbss_network, u32 mode)
+{
+	u8 network_type, *p, *ie = pbss_network->IEs;
+	sint ie_len;
+	uint network_ielen = pbss_network->IELength;
+
+	if (mode == WIRELESS_11B) {
+		/*only keep CCK in support_rate IE and remove whole ext_support_rate IE*/
+		rtw_filter_suppport_rateie(pbss_network, CCK);
+		p = rtw_get_ie(ie + _BEACON_IE_OFFSET_, _EXT_SUPPORTEDRATES_IE_, &ie_len, pbss_network->IELength - _BEACON_IE_OFFSET_);
+		if (p) {
+			rtw_ies_remove_ie(ie , &network_ielen, _BEACON_IE_OFFSET_, _EXT_SUPPORTEDRATES_IE_, NULL, 0);
+			pbss_network->IELength -= ie_len;
+		}
+		network_type = WIRELESS_11B;
+	} else if ((mode & WIRELESS_11B) == 0) {
+		/* Remove CCK in support_rate IE */
+		rtw_filter_suppport_rateie(pbss_network, OFDM);
+		if (pbss_network->Configuration.DSConfig > 14)
+			network_type = WIRELESS_11A;
+		else
+			network_type = WIRELESS_11G;
+	} else
+		network_type = WIRELESS_11BG;		/*	do nothing	*/
+
+	rtw_set_supported_rate(pbss_network->SupportedRates, network_type);
+	return network_type;
 }
 
 uint	rtw_get_rateset_len(u8	*rateset)
@@ -659,7 +713,7 @@ int rtw_get_wpa_cipher_suite(u8 *s)
 	return 0;
 }
 
-int rtw_get_wpa2_cipher_suite(u8 *s)
+int rtw_get_rsn_cipher_suite(u8 *s)
 {
 	if (_rtw_memcmp(s, RSN_CIPHER_SUITE_NONE, RSN_SELECTOR_LEN) == _TRUE)
 		return WPA_CIPHER_NONE;
@@ -669,9 +723,22 @@ int rtw_get_wpa2_cipher_suite(u8 *s)
 		return WPA_CIPHER_TKIP;
 	if (_rtw_memcmp(s, RSN_CIPHER_SUITE_CCMP, RSN_SELECTOR_LEN) == _TRUE)
 		return WPA_CIPHER_CCMP;
+	if (_rtw_memcmp(s, RSN_CIPHER_SUITE_GCMP, RSN_SELECTOR_LEN) == _TRUE)
+		return WPA_CIPHER_GCMP;
+	if (_rtw_memcmp(s, RSN_CIPHER_SUITE_GCMP_256, RSN_SELECTOR_LEN) == _TRUE)
+		return WPA_CIPHER_GCMP_256;
+	if (_rtw_memcmp(s, RSN_CIPHER_SUITE_CCMP_256, RSN_SELECTOR_LEN) == _TRUE)
+		return WPA_CIPHER_CCMP_256;
 	if (_rtw_memcmp(s, RSN_CIPHER_SUITE_WEP104, RSN_SELECTOR_LEN) == _TRUE)
 		return WPA_CIPHER_WEP104;
-
+	if (_rtw_memcmp(s, RSN_CIPHER_SUITE_AES_128_CMAC, RSN_SELECTOR_LEN) == _TRUE)
+		return WPA_CIPHER_BIP_CMAC_128;
+	if (_rtw_memcmp(s, RSN_CIPHER_SUITE_BIP_GMAC_128, RSN_SELECTOR_LEN) == _TRUE)
+		return WPA_CIPHER_BIP_GMAC_128;
+	if (_rtw_memcmp(s, RSN_CIPHER_SUITE_BIP_GMAC_256, RSN_SELECTOR_LEN) == _TRUE)
+		return WPA_CIPHER_BIP_GMAC_256;
+	if (_rtw_memcmp(s, RSN_CIPHER_SUITE_BIP_CMAC_256, RSN_SELECTOR_LEN) == _TRUE)
+		return WPA_CIPHER_BIP_CMAC_256;
 	return 0;
 }
 
@@ -884,7 +951,7 @@ err:
 }
 
 int rtw_parse_wpa2_ie(u8 *rsn_ie, int rsn_ie_len, int *group_cipher,
-	int *pairwise_cipher, u32 *akm, u8 *mfp_opt)
+	int *pairwise_cipher, int *gmcs, u32 *akm, u8 *mfp_opt)
 {
 	struct rsne_info info;
 	int i, ret = _SUCCESS;
@@ -895,7 +962,7 @@ int rtw_parse_wpa2_ie(u8 *rsn_ie, int rsn_ie_len, int *group_cipher,
 
 	if (group_cipher) {
 		if (info.gcs)
-			*group_cipher = rtw_get_wpa2_cipher_suite(info.gcs);
+			*group_cipher = rtw_get_rsn_cipher_suite(info.gcs);
 		else
 			*group_cipher = 0;
 	}
@@ -903,7 +970,14 @@ int rtw_parse_wpa2_ie(u8 *rsn_ie, int rsn_ie_len, int *group_cipher,
 	if (pairwise_cipher) {
 		*pairwise_cipher = 0;
 		for (i = 0; i < info.pcs_cnt; i++)
-			*pairwise_cipher |= rtw_get_wpa2_cipher_suite(info.pcs_list + 4 * i);
+			*pairwise_cipher |= rtw_get_rsn_cipher_suite(info.pcs_list + 4 * i);
+	}
+
+	if (gmcs) {
+		if (info.gmcs)
+			*gmcs = rtw_get_rsn_cipher_suite(info.gmcs);
+		else
+			*gmcs = WPA_CIPHER_BIP_CMAC_128; /* default value when absent */
 	}
 
 	if (akm) {
@@ -1331,7 +1405,14 @@ static int rtw_ieee802_11_parse_vendor_specific(u8 *pos, uint elen,
 			return -1;
 		}
 		break;
-
+#ifdef CONFIG_RTW_TOKEN_BASED_XMIT
+	case OUI_REALTEK:
+		if (elen == 8) {  // TBTX capable IE length is 8
+			elems->tbtx_cap = pos;
+			elems->tbtx_cap_len = elen;
+		}
+		break;
+#endif
 	default:
 		RTW_DBG("unknown vendor specific information "
 			"element ignored (vendor OUI %02x:%02x:%02x "
@@ -1707,7 +1788,7 @@ void dump_ht_cap_ie_content(void *sel, const u8 *buf, u32 buf_len)
 void dump_ht_cap_ie(void *sel, const u8 *ie, u32 ie_len)
 {
 	const u8 *ht_cap_ie;
-	sint ht_cap_ielen = 0;
+	sint ht_cap_ielen;
 
 	ht_cap_ie = rtw_get_ie(ie, WLAN_EID_HT_CAP, &ht_cap_ielen, ie_len);
 	if (!ie || ht_cap_ie != ie)
@@ -2798,7 +2879,7 @@ u32	rtw_ht_mcs_set_to_bitmap(u8 *mcs_set, u8 nss)
 }
 
 /* show MCS rate, unit: 100Kbps */
-u16 rtw_mcs_rate(u8 rf_type, u8 bw_40MHz, u8 short_GI, unsigned char *MCS_rate)
+u16 rtw_ht_mcs_rate(u8 bw_40MHz, u8 short_GI, unsigned char *MCS_rate)
 {
 	u16 max_rate = 0;
 

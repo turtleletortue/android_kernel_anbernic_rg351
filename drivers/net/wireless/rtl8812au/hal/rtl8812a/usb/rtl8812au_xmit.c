@@ -60,7 +60,6 @@ static s32 update_txdesc(struct xmit_frame *pxmitframe, u8 *pmem, s32 sz , u8 ba
 #endif/*CONFIG_80211N_HT*/
 	u8 vht_max_ampdu_size = 0;
 	struct dvobj_priv	*pdvobjpriv = adapter_to_dvobj(padapter);
-	struct registry_priv	*pregpriv = &(padapter->registrypriv);
 
 #ifndef CONFIG_USE_USB_BUFFER_ALLOC_TX
 	if (padapter->registrypriv.mp_mode == 0) {
@@ -116,16 +115,10 @@ static s32 update_txdesc(struct xmit_frame *pxmitframe, u8 *pmem, s32 sz , u8 ba
 
 	/* offset 12 */
 
-	if (pattrib->injected == _TRUE && !pregpriv->monitor_overwrite_seqnum) {
-		/* Prevent sequence number from being overwritten */
-		SET_TX_DESC_HWSEQ_EN_8812(ptxdesc, 0); /* Hw do not set sequence number */
-		SET_TX_DESC_SEQ_8812(ptxdesc, pattrib->seqnum); /* Copy inject sequence number to TxDesc */
-	}
-	else if (!pattrib->qos_en) {
+	if (!pattrib->qos_en) {
 		SET_TX_DESC_HWSEQ_EN_8812(ptxdesc, 1); /* Hw set sequence number */
-	} else {
+	} else
 		SET_TX_DESC_SEQ_8812(ptxdesc, pattrib->seqnum);
-	}
 
 	if ((pxmitframe->frame_tag & 0x0f) == DATA_FRAMETAG) {
 		/* RTW_INFO("pxmitframe->frame_tag == DATA_FRAMETAG\n");		 */
@@ -311,7 +304,7 @@ static s32 update_txdesc(struct xmit_frame *pxmitframe, u8 *pmem, s32 sz , u8 ba
 			if (pattrib->retry_ctrl == _TRUE)
 				SET_TX_DESC_DATA_RETRY_LIMIT_8812(ptxdesc, 6);
 			else
-				SET_TX_DESC_DATA_RETRY_LIMIT_8812(ptxdesc, 0);
+				SET_TX_DESC_DATA_RETRY_LIMIT_8812(ptxdesc, 12);
 		}
 
 #ifdef CONFIG_XMIT_ACK
@@ -437,7 +430,7 @@ u32 upload_txpktbuf_8812au(_adapter *adapter, u8 *buf, u32 buflen)
 		}
 		rtw_write32(adapter, REG_PKTBUF_DBG_CTRL, 0xff800000+(beacon_head<<6) + qw_addr);
 		loop_cnt = 0;
-		while ((rtw_read32(adapter, REG_PKTBUF_DBG_CTRL) & BIT23) == false) {
+		while ((rtw_read32(adapter, REG_PKTBUF_DBG_CTRL) & BIT23) != _FALSE) {
 			rtw_udelay_os(10);
 			if (loop_cnt++ == 100)
 				return _FALSE;
@@ -470,7 +463,7 @@ static s32 rtw_dump_xframe(_adapter *padapter, struct xmit_frame *pxmitframe)
 	    (pxmitframe->attrib.ether_type != 0x888e) &&
 	    (pxmitframe->attrib.ether_type != 0x88b4) &&
 	    (pxmitframe->attrib.dhcp_pkt != 1))
-		rtw_issue_addbareq_cmd(padapter, pxmitframe);
+		rtw_issue_addbareq_cmd(padapter, pxmitframe, _FALSE);
 #endif /* CONFIG_80211N_HT */
 	mem_addr = pxmitframe->buf_addr;
 
@@ -809,7 +802,7 @@ agg_end:
 	    (pfirstframe->attrib.ether_type != 0x888e) &&
 	    (pfirstframe->attrib.ether_type != 0x88b4) &&
 	    (pfirstframe->attrib.dhcp_pkt != 1))
-		rtw_issue_addbareq_cmd(padapter, pfirstframe);
+		rtw_issue_addbareq_cmd(padapter, pfirstframe, _FALSE);
 #endif /* CONFIG_80211N_HT */
 #ifndef CONFIG_USE_USB_BUFFER_ALLOC_TX
 	/* 3 3. update first frame txdesc */

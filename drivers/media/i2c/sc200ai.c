@@ -8,6 +8,8 @@
  * V0.0X01.0X02 fix mclk issue when probe multiple camera.
  * V0.0X01.0X03 fix gain range.
  * V0.0X01.0X04 add enum_frame_interval function.
+ * V0.0X01.0X05 add quick stream on/off.
+ * V0.0X01.0X06 fix set vflip/hflip failed bug.
  */
 
 #include <linux/clk.h>
@@ -29,7 +31,7 @@
 #include <media/v4l2-subdev.h>
 #include <linux/pinctrl/consumer.h>
 
-#define DRIVER_VERSION			KERNEL_VERSION(0, 0x01, 0x04)
+#define DRIVER_VERSION			KERNEL_VERSION(0, 0x01, 0x06)
 
 #ifndef V4L2_CID_DIGITAL_GAIN
 #define V4L2_CID_DIGITAL_GAIN		V4L2_CID_GAIN
@@ -69,7 +71,7 @@
 #define SC200AI_REG_SANA_GAIN		0x3e12
 #define SC200AI_REG_SANA_FINE_GAIN	0x3e13
 #define SC200AI_GAIN_MIN		0x0040
-#define SC200AI_GAIN_MAX		((4284 * 315 / 1000) * 64)
+#define SC200AI_GAIN_MAX		(54 * 32 * 64)       //53.975*31.75*64
 #define SC200AI_GAIN_STEP		1
 #define SC200AI_GAIN_DEFAULT		0x0800
 #define SC200AI_LGAIN			0
@@ -614,124 +616,6 @@ static int sc200ai_read_reg(struct i2c_client *client, u16 reg, unsigned int len
 	return 0;
 }
 
-static int sc200ai_set_hightemp_dpc(struct sc200ai *sc200ai, u32 gain)
-{
-	u32 temp_H1, temp_H2, temp_L, temp;
-	static int flag = 1;
-	static int frmcount = 1;
-	int ret = 0;
-
-	if (frmcount < 4) {
-		frmcount++;
-	} else {
-		ret = sc200ai_read_reg(sc200ai->client, SC200AI_REG_HIGH_TEMP_H,
-				       SC200AI_REG_VALUE_08BIT, &temp_H1);
-		ret |= sc200ai_read_reg(sc200ai->client, SC200AI_REG_HIGH_TEMP_L,
-					SC200AI_REG_VALUE_08BIT, &temp_L);
-		temp = (temp_H1 << 8) | temp_L;
-		ret |= sc200ai_read_reg(sc200ai->client, SC200AI_REG_HIGH_TEMP_H,
-					SC200AI_REG_VALUE_08BIT, &temp_H2);
-		if (temp_H1 == temp_H2) {
-			if (temp > 0x2040 || gain >= 53 * 1024) {
-				if (temp > 0x2040) {
-					if (flag != 2) {
-						ret |= sc200ai_write_reg(sc200ai->client,
-								SC200AI_REG_GROUP_HOLD,
-								SC200AI_REG_VALUE_08BIT,
-								SC200AI_GROUP_HOLD_START);
-						ret |= sc200ai_write_reg(sc200ai->client,
-								0x5787,
-								SC200AI_REG_VALUE_08BIT,
-								0x00);
-						ret |= sc200ai_write_reg(sc200ai->client,
-								0x5788,
-								SC200AI_REG_VALUE_08BIT,
-								0x00);
-						ret |= sc200ai_write_reg(sc200ai->client,
-								0x5790,
-								SC200AI_REG_VALUE_08BIT,
-								0x00);
-						ret |= sc200ai_write_reg(sc200ai->client,
-								0x5791,
-								SC200AI_REG_VALUE_08BIT,
-								0x00);
-						ret |= sc200ai_write_reg(sc200ai->client,
-								0x5799,
-								SC200AI_REG_VALUE_08BIT,
-								0x07);
-						ret |= sc200ai_write_reg(sc200ai->client,
-								SC200AI_REG_GROUP_HOLD,
-								SC200AI_REG_VALUE_08BIT,
-								SC200AI_GROUP_HOLD_END);
-						flag = 2;
-					} else if (flag != 3) {
-						ret |= sc200ai_write_reg(sc200ai->client,
-								SC200AI_REG_GROUP_HOLD,
-								SC200AI_REG_VALUE_08BIT,
-								SC200AI_GROUP_HOLD_START);
-						ret |= sc200ai_write_reg(sc200ai->client,
-								0x5787,
-								SC200AI_REG_VALUE_08BIT,
-								0x10);
-						ret |= sc200ai_write_reg(sc200ai->client,
-								0x5788,
-								SC200AI_REG_VALUE_08BIT,
-								0x06);
-						ret |= sc200ai_write_reg(sc200ai->client,
-								0x5790,
-								SC200AI_REG_VALUE_08BIT,
-								0x10);
-						ret |= sc200ai_write_reg(sc200ai->client,
-								0x5791,
-								SC200AI_REG_VALUE_08BIT,
-								0x10);
-						ret |= sc200ai_write_reg(sc200ai->client,
-								0x5799,
-								SC200AI_REG_VALUE_08BIT,
-								0x07);
-						ret |= sc200ai_write_reg(sc200ai->client,
-								SC200AI_REG_GROUP_HOLD,
-								SC200AI_REG_VALUE_08BIT,
-								SC200AI_GROUP_HOLD_END);
-						flag = 3;
-					}
-				}
-			} else if (temp < 0x2030 && gain <= 53 * 1024 && flag != 1) {
-				ret |= sc200ai_write_reg(sc200ai->client,
-							 SC200AI_REG_GROUP_HOLD,
-							 SC200AI_REG_VALUE_08BIT,
-							 SC200AI_GROUP_HOLD_START);
-				ret |= sc200ai_write_reg(sc200ai->client,
-							 0x5787,
-							 SC200AI_REG_VALUE_08BIT,
-							 0x10);
-				ret |= sc200ai_write_reg(sc200ai->client,
-							 0x5788,
-							 SC200AI_REG_VALUE_08BIT,
-							 0x06);
-				ret |= sc200ai_write_reg(sc200ai->client,
-							 0x5790,
-							 SC200AI_REG_VALUE_08BIT,
-							 0x10);
-				ret |= sc200ai_write_reg(sc200ai->client,
-							 0x5791,
-							 SC200AI_REG_VALUE_08BIT,
-							 0x10);
-				ret |= sc200ai_write_reg(sc200ai->client,
-							 0x5799,
-							 SC200AI_REG_VALUE_08BIT,
-							 0x00);
-				ret |= sc200ai_write_reg(sc200ai->client,
-							 SC200AI_REG_GROUP_HOLD,
-							 SC200AI_REG_VALUE_08BIT,
-							SC200AI_GROUP_HOLD_END);
-				flag = 1;
-			}
-		}
-	}
-	return ret;
-}
-
 /* mode: 0 = lgain  1 = sgain */
 static int sc200ai_set_gain_reg(struct sc200ai *sc200ai, u32 gain, int mode)
 {
@@ -793,6 +677,7 @@ static int sc200ai_set_gain_reg(struct sc200ai *sc200ai, u32 gain, int mode)
 		Dcg_gainx100 = 340;
 		Coarse_gain = 8;
 		DIG_gain = 1;
+		ANA_Fine_gainx64 = 127;
 		Coarse_gain_reg = 0x3f;
 		DIG_gain_reg = 0x0;
 		ANA_Fine_gain_reg = 0x7f;
@@ -876,7 +761,16 @@ static int sc200ai_set_gain_reg(struct sc200ai *sc200ai, u32 gain, int mode)
 					 ANA_Fine_gain_reg);
 	}
 
-	ret |= sc200ai_set_hightemp_dpc(sc200ai, gain);
+	if (gain <= 20 * 1024)
+		ret |= sc200ai_write_reg(sc200ai->client,
+					 0x5799,
+					 SC200AI_REG_VALUE_08BIT,
+					 0x0);
+	else if (gain >= 30 * 1024)
+		ret |= sc200ai_write_reg(sc200ai->client,
+					 0x5799,
+					 SC200AI_REG_VALUE_08BIT,
+					 0x07);
 
 	return ret;
 }
@@ -1076,17 +970,19 @@ static int sc200ai_enum_frame_sizes(struct v4l2_subdev *sd,
 
 static int sc200ai_enable_test_pattern(struct sc200ai *sc200ai, u32 pattern)
 {
-	u32 val;
+	u32 val = 0;
+	int ret = 0;
 
-	sc200ai_read_reg(sc200ai->client, SC200AI_REG_TEST_PATTERN,
+	ret = sc200ai_read_reg(sc200ai->client, SC200AI_REG_TEST_PATTERN,
 			       SC200AI_REG_VALUE_08BIT, &val);
 	if (pattern)
 		val |= SC200AI_TEST_PATTERN_BIT_MASK;
 	else
 		val &= ~SC200AI_TEST_PATTERN_BIT_MASK;
 
-	return sc200ai_write_reg(sc200ai->client, SC200AI_REG_TEST_PATTERN,
+	ret |= sc200ai_write_reg(sc200ai->client, SC200AI_REG_TEST_PATTERN,
 				 SC200AI_REG_VALUE_08BIT, val);
+	return ret;
 }
 
 static int sc200ai_g_frame_interval(struct v4l2_subdev *sd,
@@ -1138,6 +1034,7 @@ static long sc200ai_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	struct rkmodule_hdr_cfg *hdr;
 	u32 i, h, w;
 	long ret = 0;
+	u32 stream = 0;
 
 	switch (cmd) {
 	case RKMODULE_GET_MODULE_INFO:
@@ -1176,7 +1073,16 @@ static long sc200ai_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	case PREISP_CMD_SET_HDRAE_EXP:
 		sc200ai_set_hdrae(sc200ai, arg);
 		break;
-	case RKMODULE_GET_NR_SWITCH_THRESHOLD:
+	case RKMODULE_SET_QUICK_STREAM:
+
+		stream = *((u32 *)arg);
+
+		if (stream)
+			ret = sc200ai_write_reg(sc200ai->client, SC200AI_REG_CTRL_MODE,
+				 SC200AI_REG_VALUE_08BIT, SC200AI_MODE_STREAMING);
+		else
+			ret = sc200ai_write_reg(sc200ai->client, SC200AI_REG_CTRL_MODE,
+				 SC200AI_REG_VALUE_08BIT, SC200AI_MODE_SW_STANDBY);
 		break;
 	default:
 		ret = -ENOIOCTLCMD;
@@ -1196,6 +1102,7 @@ static long sc200ai_compat_ioctl32(struct v4l2_subdev *sd,
 	struct rkmodule_hdr_cfg *hdr;
 	struct preisp_hdrae_exp_s *hdrae;
 	long ret;
+	u32 stream = 0;
 
 	switch (cmd) {
 	case RKMODULE_GET_MODULE_INFO:
@@ -1258,17 +1165,10 @@ static long sc200ai_compat_ioctl32(struct v4l2_subdev *sd,
 			ret = sc200ai_ioctl(sd, cmd, hdrae);
 		kfree(hdrae);
 		break;
-	case RKMODULE_GET_NR_SWITCH_THRESHOLD:
-		nr_switch = kzalloc(sizeof(*nr_switch), GFP_KERNEL);
-		if (!nr_switch) {
-			ret = -ENOMEM;
-			return ret;
-		}
-
-		ret = sc200ai_ioctl(sd, cmd, nr_switch);
+	case RKMODULE_SET_QUICK_STREAM:
+		ret = copy_from_user(&stream, up, sizeof(u32));
 		if (!ret)
-			ret = copy_to_user(up, nr_switch, sizeof(*nr_switch));
-		kfree(nr_switch);
+			ret = sc200ai_ioctl(sd, cmd, &stream);
 		break;
 	default:
 		ret = -ENOIOCTLCMD;
@@ -1288,6 +1188,9 @@ static int __sc200ai_start_stream(struct sc200ai *sc200ai)
 		return ret;
 
 	/* In case these controls are set before streaming */
+	ret = __v4l2_ctrl_handler_setup(&sc200ai->ctrl_handler);
+	if (ret)
+		return ret;
 	if (sc200ai->has_init_exp && sc200ai->cur_mode->hdr_mode != NO_HDR) {
 		ret = sc200ai_ioctl(&sc200ai->subdev, PREISP_CMD_SET_HDRAE_EXP,
 			&sc200ai->init_hdrae_exp);
@@ -1297,12 +1200,6 @@ static int __sc200ai_start_stream(struct sc200ai *sc200ai)
 			return ret;
 		}
 	}
-	mutex_unlock(&sc200ai->mutex);
-	ret = v4l2_ctrl_handler_setup(&sc200ai->ctrl_handler);
-	mutex_lock(&sc200ai->mutex);
-	if (ret)
-		return ret;
-
 
 	return sc200ai_write_reg(sc200ai->client, SC200AI_REG_CTRL_MODE,
 				 SC200AI_REG_VALUE_08BIT, SC200AI_MODE_STREAMING);
@@ -1587,7 +1484,7 @@ static int sc200ai_set_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	}
 
-	if (pm_runtime_get(&client->dev) <= 0)
+	if (!pm_runtime_get_if_in_use(&client->dev))
 		return 0;
 
 	switch (ctrl->id) {
@@ -1669,7 +1566,7 @@ static int sc200ai_initialize_controls(struct sc200ai *sc200ai)
 
 	handler = &sc200ai->ctrl_handler;
 	mode = sc200ai->cur_mode;
-	ret = v4l2_ctrl_handler_init(handler, 8);
+	ret = v4l2_ctrl_handler_init(handler, 9);
 	if (ret)
 		return ret;
 	handler->lock = &sc200ai->mutex;
@@ -1706,6 +1603,12 @@ static int sc200ai_initialize_controls(struct sc200ai *sc200ai)
 					V4L2_CID_TEST_PATTERN,
 					ARRAY_SIZE(sc200ai_test_pattern_menu) - 1,
 					0, 0, sc200ai_test_pattern_menu);
+	v4l2_ctrl_new_std(handler, &sc200ai_ctrl_ops,
+				V4L2_CID_HFLIP, 0, 1, 1, 0);
+
+	v4l2_ctrl_new_std(handler, &sc200ai_ctrl_ops,
+				V4L2_CID_VFLIP, 0, 1, 1, 0);
+
 	if (handler->error) {
 		ret = handler->error;
 		dev_err(&sc200ai->client->dev,

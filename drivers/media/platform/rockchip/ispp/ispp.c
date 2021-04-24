@@ -8,6 +8,7 @@
 #include <linux/videodev2.h>
 #include <media/media-entity.h>
 #include <media/videobuf2-dma-contig.h>
+#include <media/v4l2-event.h>
 
 #include "dev.h"
 #include "regs.h"
@@ -258,11 +259,18 @@ static int rkispp_sd_s_stream(struct v4l2_subdev *sd, int on)
 			       video, s_stream, on);
 	if ((on && ret) || (!on && !ret)) {
 		ispp_sdev->state = ISPP_STOP;
-		if (dev->stream_vdev.monitor.is_en &&
-		    dev->stream_vdev.monitor.is_restart)
-			complete(&dev->stream_vdev.monitor.cmpl);
+		if (dev->stream_vdev.monitor.is_en) {
+			dev->stream_vdev.monitor.is_en = false;
+			if (!completion_done(&dev->stream_vdev.monitor.cmpl))
+				complete(&dev->stream_vdev.monitor.cmpl);
+			if (!completion_done(&dev->stream_vdev.monitor.tnr.cmpl))
+				complete(&dev->stream_vdev.monitor.tnr.cmpl);
+			if (!completion_done(&dev->stream_vdev.monitor.nr.cmpl))
+				complete(&dev->stream_vdev.monitor.nr.cmpl);
+			if (!completion_done(&dev->stream_vdev.monitor.fec.cmpl))
+				complete(&dev->stream_vdev.monitor.fec.cmpl);
+		}
 		rkispp_event_handle(dev, CMD_STREAM, &ispp_sdev->state);
-		rkispp_event_handle(dev, CMD_FREE_POOL, NULL);
 	}
 	return ret;
 }
@@ -367,6 +375,8 @@ static long rkispp_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	struct rkispp_device *ispp_dev = ispp_sdev->dev;
 	struct rkispp_fecbuf_info *fecbuf;
 	struct rkispp_fecbuf_size *fecsize;
+	struct rkisp_ispp_reg **reg_buf;
+	bool *rkispp_reg_withstream;
 	long ret = 0;
 
 	if (!arg)
@@ -380,6 +390,23 @@ static long rkispp_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	case RKISPP_CMD_SET_FECBUF_SIZE:
 		fecsize = (struct rkispp_fecbuf_size *)arg;
 		rkispp_params_set_fecbuf_size(&ispp_dev->params_vdev, fecsize);
+		break;
+	case RKISP_ISPP_CMD_REQUEST_REGBUF:
+		reg_buf = (struct rkisp_ispp_reg **)arg;
+		rkispp_request_regbuf(ispp_dev, reg_buf);
+		break;
+	case RKISP_ISPP_CMD_GET_REG_WITHSTREAM:
+		rkispp_reg_withstream = arg;
+		*rkispp_reg_withstream = rkispp_get_reg_withstream();
+		break;
+	case RKISPP_CMD_TRIGGER_YNRRUN:
+		rkispp_sendbuf_to_nr(ispp_dev, (struct rkispp_tnr_inf *)arg);
+		break;
+	case RKISPP_CMD_GET_TNRBUF_FD:
+		ret = rkispp_get_tnrbuf_fd(ispp_dev, (struct rkispp_buf_idxfd *)arg);
+		break;
+	case RKISPP_CMD_TRIGGER_MODE:
+		rkispp_set_trigger_mode(ispp_dev, (struct rkispp_trigger_mode *)arg);
 		break;
 	default:
 		ret = -ENOIOCTLCMD;
@@ -395,6 +422,9 @@ static long rkispp_compat_ioctl32(struct v4l2_subdev *sd,
 	void __user *up = compat_ptr(arg);
 	struct rkispp_fecbuf_info fecbuf;
 	struct rkispp_fecbuf_size fecsize;
+	struct rkispp_tnr_inf tnr_inf;
+	struct rkispp_buf_idxfd idxfd;
+	struct rkispp_trigger_mode t_mode;
 	long ret = 0;
 
 	if (!up)
@@ -409,7 +439,22 @@ static long rkispp_compat_ioctl32(struct v4l2_subdev *sd,
 	case RKISPP_CMD_SET_FECBUF_SIZE:
 		ret = copy_from_user(&fecsize, up, sizeof(fecsize));
 		if (!ret)
-			ret = rkisp_ioctl(sd, cmd, &fecsize);
+			ret = rkispp_ioctl(sd, cmd, &fecsize);
+		break;
+	case RKISPP_CMD_TRIGGER_YNRRUN:
+		ret = copy_from_user(&tnr_inf, up, sizeof(tnr_inf));
+		if (!ret)
+			ret = rkispp_ioctl(sd, cmd, &tnr_inf);
+		break;
+	case RKISPP_CMD_GET_TNRBUF_FD:
+		ret = rkispp_ioctl(sd, cmd, &idxfd);
+		if (!ret)
+			ret = copy_to_user(up, &idxfd, sizeof(idxfd));
+		break;
+	case RKISPP_CMD_TRIGGER_MODE:
+		ret = copy_from_user(&t_mode, up, sizeof(t_mode));
+		if (!ret)
+			ret = rkispp_ioctl(sd, cmd, &t_mode);
 		break;
 	default:
 		ret = -ENOIOCTLCMD;
@@ -418,6 +463,18 @@ static long rkispp_compat_ioctl32(struct v4l2_subdev *sd,
 	return ret;
 }
 #endif
+
+static int rkispp_subscribe_event(struct v4l2_subdev *sd,
+				  struct v4l2_fh *fh,
+				  struct v4l2_event_subscription *sub)
+{
+	switch (sub->type) {
+	case RKISPP_V4L2_EVENT_TNR_COMPLETE:
+		return v4l2_event_subscribe(fh, sub, RKISPP_BUF_MAX, NULL);
+	default:
+		return -EINVAL;
+	}
+}
 
 static const struct media_entity_operations rkispp_sd_media_ops = {
 	.link_setup = rkispp_subdev_link_setup,
@@ -442,6 +499,8 @@ static const struct v4l2_subdev_core_ops rkispp_sd_core_ops = {
 #ifdef CONFIG_COMPAT
 	.compat_ioctl32 = rkispp_compat_ioctl32,
 #endif
+	.subscribe_event = rkispp_subscribe_event,
+	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
 };
 
 static struct v4l2_subdev_ops rkispp_sd_ops = {
@@ -462,7 +521,7 @@ int rkispp_register_subdev(struct rkispp_device *dev,
 	sd = &ispp_sdev->sd;
 	ispp_sdev->state = ISPP_STOP;
 	v4l2_subdev_init(sd, &rkispp_sd_ops);
-	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
 	sd->entity.ops = &rkispp_sd_media_ops;
 	snprintf(sd->name, sizeof(sd->name), "rkispp-subdev");
 	sd->entity.function = MEDIA_ENT_F_PROC_VIDEO_COMPOSER;

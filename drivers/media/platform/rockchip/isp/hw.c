@@ -15,6 +15,8 @@
 #include <linux/pinctrl/consumer.h>
 #include <linux/pm_runtime.h>
 #include <linux/reset.h>
+#include <media/videobuf2-dma-contig.h>
+#include <media/videobuf2-dma-sg.h>
 
 #include "common.h"
 #include "dev.h"
@@ -82,7 +84,7 @@ static void default_sw_reg_flag(struct rkisp_device *dev)
 	u32 i, *flag;
 
 	for (i = 0; i < ARRAY_SIZE(reg); i++) {
-		flag = dev->sw_base_addr + reg[i] + ISP_SW_REG_SIZE;
+		flag = dev->sw_base_addr + reg[i] + RKISP_ISP_SW_REG_SIZE;
 		*flag = SW_REG_CACHE;
 	}
 }
@@ -103,19 +105,21 @@ static irqreturn_t mipi_irq_hdl(int irq, void *ctx)
 		err2 = readl(hw_dev->base_addr + CIF_ISP_CSI0_ERR2);
 		err3 = readl(hw_dev->base_addr + CIF_ISP_CSI0_ERR3);
 
-		if (err3 & 0xf)
-			rkisp_mipi_dmatx0_end(err3, isp);
 		if (err1 || err2 || err3)
 			rkisp_mipi_v13_isr(err1, err2, err3, isp);
-	} else if (hw_dev->isp_ver == ISP_V20) {
+	} else if (hw_dev->isp_ver == ISP_V20 || hw_dev->isp_ver == ISP_V21) {
 		u32 phy, packet, overflow, state;
 
 		state = readl(hw_dev->base_addr + CSI2RX_ERR_STAT);
 		phy = readl(hw_dev->base_addr + CSI2RX_ERR_PHY);
 		packet = readl(hw_dev->base_addr + CSI2RX_ERR_PACKET);
 		overflow = readl(hw_dev->base_addr + CSI2RX_ERR_OVERFLOW);
-		if (phy | packet | overflow | state)
-			rkisp_mipi_v20_isr(phy, packet, overflow, state, isp);
+		if (phy | packet | overflow | state) {
+			if (hw_dev->isp_ver == ISP_V20)
+				rkisp_mipi_v20_isr(phy, packet, overflow, state, isp);
+			else
+				rkisp_mipi_v21_isr(phy, packet, overflow, state, isp);
+		}
 	} else {
 		u32 mis_val = readl(hw_dev->base_addr + CIF_MIPI_MIS);
 
@@ -160,7 +164,7 @@ static irqreturn_t isp_irq_hdl(int irq, void *ctx)
 		return IRQ_HANDLED;
 
 	mis_val = readl(hw_dev->base_addr + CIF_ISP_MIS);
-	if (hw_dev->isp_ver == ISP_V20)
+	if (hw_dev->isp_ver == ISP_V20 || hw_dev->isp_ver == ISP_V21)
 		mis_3a = readl(hw_dev->base_addr + ISP_ISP3A_MIS);
 	if (mis_val || mis_3a)
 		rkisp_isp_isr(mis_val, mis_3a, isp);
@@ -176,7 +180,7 @@ static irqreturn_t irq_handler(int irq, void *ctx)
 	unsigned int mis_val, mis_3a = 0;
 
 	mis_val = readl(hw_dev->base_addr + CIF_ISP_MIS);
-	if (hw_dev->isp_ver == ISP_V20)
+	if (hw_dev->isp_ver == ISP_V20 || hw_dev->isp_ver == ISP_V21)
 		mis_3a = readl(hw_dev->base_addr + ISP_ISP3A_MIS);
 	if (mis_val || mis_3a)
 		rkisp_isp_isr(mis_val, mis_3a, isp);
@@ -291,6 +295,12 @@ static const char * const rk3399_isp_clks[] = {
 	"pclk_isp_wrap"
 };
 
+static const char * const rk3568_isp_clks[] = {
+	"clk_isp",
+	"aclk_isp",
+	"hclk_isp",
+};
+
 static const char * const rv1126_isp_clks[] = {
 	"clk_isp",
 	"aclk_isp",
@@ -322,8 +332,27 @@ static const struct isp_clk_info rk3399_isp_clk_rate[] = {
 	{300, }, {400, }, {600, }
 };
 
+static const struct isp_clk_info rk3568_isp_clk_rate[] = {
+	{
+		.clk_rate = 300,
+		.refer_data = 1920, //width
+	}, {
+		.clk_rate = 400,
+		.refer_data = 2688,
+	}, {
+		.clk_rate = 500,
+		.refer_data = 3072,
+	}, {
+		.clk_rate = 600,
+		.refer_data = 3840,
+	}
+};
+
 static const struct isp_clk_info rv1126_isp_clk_rate[] = {
 	{
+		.clk_rate = 20,
+		.refer_data = 0,
+	}, {
 		.clk_rate = 300,
 		.refer_data = 1920, //width
 	}, {
@@ -360,6 +389,12 @@ static struct isp_irqs_data rk3368_isp_irqs[] = {
 
 static struct isp_irqs_data rk3399_isp_irqs[] = {
 	{"isp_irq", irq_handler}
+};
+
+static struct isp_irqs_data rk3568_isp_irqs[] = {
+	{"isp_irq", isp_irq_hdl},
+	{"mi_irq", mi_irq_hdl},
+	{"mipi_irq", mipi_irq_hdl}
 };
 
 static struct isp_irqs_data rv1126_isp_irqs[] = {
@@ -428,6 +463,16 @@ static const struct isp_match_data rk3399_isp_match_data = {
 	.num_irqs = ARRAY_SIZE(rk3399_isp_irqs)
 };
 
+static const struct isp_match_data rk3568_isp_match_data = {
+	.clks = rk3568_isp_clks,
+	.num_clks = ARRAY_SIZE(rk3568_isp_clks),
+	.isp_ver = ISP_V21,
+	.clk_rate_tbl = rk3568_isp_clk_rate,
+	.num_clk_rate_tbl = ARRAY_SIZE(rk3568_isp_clk_rate),
+	.irqs = rk3568_isp_irqs,
+	.num_irqs = ARRAY_SIZE(rk3568_isp_irqs)
+};
+
 static const struct of_device_id rkisp_hw_of_match[] = {
 	{
 		.compatible = "rockchip,rk1808-rkisp1",
@@ -444,6 +489,9 @@ static const struct of_device_id rkisp_hw_of_match[] = {
 	}, {
 		.compatible = "rockchip,rk3399-rkisp1",
 		.data = &rk3399_isp_match_data,
+	}, {
+		.compatible = "rockchip,rk3568-rkisp",
+		.data = &rk3568_isp_match_data,
 	}, {
 		.compatible = "rockchip,rv1126-rkisp",
 		.data = &rv1126_isp_match_data,
@@ -513,14 +561,17 @@ static void isp_config_clk(struct rkisp_hw_dev *dev, int on)
 		      CIF_CLK_CTRL_CP | CIF_CLK_CTRL_IE;
 
 		writel(val, dev->base_addr + CIF_VI_ISP_CLK_CTRL_V12);
-	} else if (dev->isp_ver == ISP_V20) {
+	} else if (dev->isp_ver == ISP_V20 || dev->isp_ver == ISP_V21) {
 		val = !on ? 0 :
 		      CLK_CTRL_MI_LDC | CLK_CTRL_MI_MP |
 		      CLK_CTRL_MI_JPEG | CLK_CTRL_MI_DP |
 		      CLK_CTRL_MI_Y12 | CLK_CTRL_MI_SP |
 		      CLK_CTRL_MI_RAW0 | CLK_CTRL_MI_RAW1 |
 		      CLK_CTRL_MI_READ | CLK_CTRL_MI_RAWRD |
-		      CLK_CTRL_ISP_3A | CLK_CTRL_ISP_RAW;
+		      CLK_CTRL_ISP_RAW;
+
+		if (dev->isp_ver == ISP_V20 && on)
+			val |= CLK_CTRL_ISP_3A;
 		writel(val, dev->base_addr + CTRL_VI_ISP_CLK_CTRL);
 	}
 }
@@ -553,6 +604,8 @@ static int enable_sys_clk(struct rkisp_hw_dev *dev)
 		}
 	}
 
+	rkisp_set_clk_rate(dev->clks[0],
+			   dev->clk_rate_tbl[0].clk_rate * 1000000UL);
 	rkisp_soft_reset(dev);
 	isp_config_clk(dev, true);
 
@@ -643,25 +696,41 @@ static int rkisp_hw_probe(struct platform_device *pdev)
 		hw_dev->reset = NULL;
 	}
 
+	ret = of_property_read_u64(node, "rockchip,iq-feature", &hw_dev->iq_feature);
+	if (!ret)
+		hw_dev->is_feature_on = true;
+	else
+		hw_dev->is_feature_on = false;
+
 	hw_dev->dev_num = 0;
 	hw_dev->cur_dev_id = 0;
 	hw_dev->mipi_dev_id = 0;
 	hw_dev->isp_ver = match_data->isp_ver;
+	mutex_init(&hw_dev->dev_lock);
 	spin_lock_init(&hw_dev->rdbk_lock);
 	atomic_set(&hw_dev->refcnt, 0);
-	atomic_set(&hw_dev->power_cnt, 0);
 	spin_lock_init(&hw_dev->buf_lock);
 	INIT_LIST_HEAD(&hw_dev->list);
+	INIT_LIST_HEAD(&hw_dev->rpt_list);
 	hw_dev->is_idle = true;
 	hw_dev->is_single = true;
 	hw_dev->is_mi_update = false;
-	if (!is_iommu_enable(dev)) {
-		ret = of_reserved_mem_device_init(dev);
-		if (ret) {
-			dev_err(dev, "No reserved memory region\n");
-			goto err;
-		}
+	hw_dev->is_dma_contig = true;
+	hw_dev->is_buf_init = false;
+	hw_dev->is_mmu = is_iommu_enable(dev);
+	ret = of_reserved_mem_device_init(dev);
+	if (ret) {
+		if (!hw_dev->is_mmu)
+			dev_warn(dev, "No reserved memory region. default cma area!\n");
+		else
+			hw_dev->is_dma_contig = false;
 	}
+	if (!hw_dev->is_mmu)
+		hw_dev->mem_ops = &vb2_dma_contig_memops;
+	else if (!hw_dev->is_dma_contig)
+		hw_dev->mem_ops = &vb2_dma_sg_memops;
+	else
+		hw_dev->mem_ops = &vb2_rdma_sg_memops;
 
 	pm_runtime_enable(dev);
 
@@ -672,7 +741,10 @@ err:
 
 static int rkisp_hw_remove(struct platform_device *pdev)
 {
+	struct rkisp_hw_dev *hw_dev = platform_get_drvdata(pdev);
+
 	pm_runtime_disable(&pdev->dev);
+	mutex_destroy(&hw_dev->dev_lock);
 	return 0;
 }
 
@@ -699,8 +771,8 @@ static int __maybe_unused rkisp_runtime_resume(struct device *dev)
 	for (i = 0; i < hw_dev->dev_num; i++) {
 		void *buf = hw_dev->isp[i]->sw_base_addr;
 
-		memset(buf, 0, ISP_SW_MAX_SIZE);
-		memcpy_fromio(buf, base, ISP_SW_REG_SIZE);
+		memset(buf, 0, RKISP_ISP_SW_MAX_SIZE);
+		memcpy_fromio(buf, base, RKISP_ISP_SW_REG_SIZE);
 		default_sw_reg_flag(hw_dev->isp[i]);
 	}
 	return 0;

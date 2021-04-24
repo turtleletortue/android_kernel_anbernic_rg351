@@ -9,10 +9,15 @@
 
 #include <linux/types.h>
 
-#define RKMODULE_API_VERSION		KERNEL_VERSION(0, 1, 0x1)
+#define RKMODULE_API_VERSION		KERNEL_VERSION(0, 1, 0x2)
+
+/* using for rv1109 and rv1126 */
+#define RKMODULE_EXTEND_LINE		24
 
 #define RKMODULE_NAME_LEN		32
 #define RKMODULE_LSCDATA_LEN		441
+
+#define RKMODULE_MAX_VC_CH		4
 
 #define RKMODULE_CAMERA_MODULE_INDEX	"rockchip,camera-module-index"
 #define RKMODULE_CAMERA_MODULE_FACING	"rockchip,camera-module-facing"
@@ -51,6 +56,18 @@
 
 #define RKMODULE_SET_QUICK_STREAM	\
 	_IOW('V', BASE_VIDIOC_PRIVATE + 10, __u32)
+
+#define RKMODULE_GET_BT656_INTF_TYPE	\
+	_IOR('V', BASE_VIDIOC_PRIVATE + 11, __u32)
+
+#define RKMODULE_GET_VC_FMT_INFO \
+    _IOR('V', BASE_VIDIOC_PRIVATE + 12, struct rkmodule_vc_fmt_info)
+
+#define RKMODULE_GET_VC_HOTPLUG_INFO \
+    _IOR('V', BASE_VIDIOC_PRIVATE + 13, struct rkmodule_vc_hotplug_info)
+
+#define RKMODULE_GET_START_STREAM_SEQ	\
+	_IOR('V', BASE_VIDIOC_PRIVATE + 14, __u32)
 
 /**
  * struct rkmodule_base_inf - module base information
@@ -312,5 +329,45 @@ struct rkmodule_nr_switch_threshold {
 	__u32 down_thres;
 	__u32 div_coeff;
 } __attribute__ ((packed));
+
+/**
+ * enum rkmodule_bt656_intf_type
+ * to support sony bt656 raw
+ */
+enum rkmodule_bt656_intf_type {
+	BT656_STD_RAW = 0,
+	BT656_SONY_RAW,
+};
+
+/**
+ * struct rkmodule_vc_fmt_info - virtual channels fmt info
+ *
+ */
+struct rkmodule_vc_fmt_info {
+	__u32 width[RKMODULE_MAX_VC_CH];
+	__u32 height[RKMODULE_MAX_VC_CH];
+	__u32 fps[RKMODULE_MAX_VC_CH];
+} __attribute__ ((packed));
+
+/**
+ * struct rkmodule_vc_hotplug_info - virtual channels hotplug status info
+ * detect_status: hotplug status
+ *     bit 0~3 means channels id, value : 0 -> plug out, 1 -> plug in.
+ */
+struct rkmodule_vc_hotplug_info {
+	__u8 detect_status;
+} __attribute__ ((packed));
+
+
+/* sensor start stream sequence
+ * RKMODULE_START_STREAM_DEFAULT: by default
+ * RKMODULE_START_STREAM_BEHIND : sensor start stream should be behind the controller
+ * RKMODULE_START_STREAM_FRONT  : sensor start stream should be in front of the controller
+ */
+enum rkmodule_start_stream_seq {
+	RKMODULE_START_STREAM_DEFAULT = 0,
+	RKMODULE_START_STREAM_BEHIND,
+	RKMODULE_START_STREAM_FRONT,
+};
 
 #endif /* _UAPI_RKMODULE_CAMERA_H */

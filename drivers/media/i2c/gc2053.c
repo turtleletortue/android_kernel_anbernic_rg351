@@ -5,6 +5,7 @@
  * Copyright (C) 2020 Rockchip Electronics Co., Ltd.
  *
  * V0.0X01.0X00 first version.
+ * V0.0X01.0X01 add quick stream on/off
  */
 
 #include <linux/clk.h>
@@ -34,7 +35,7 @@
 #include <media/v4l2-mediabus.h>
 #include <media/v4l2-subdev.h>
 
-#define DRIVER_VERSION          KERNEL_VERSION(0, 0x01, 0x00)
+#define DRIVER_VERSION          KERNEL_VERSION(0, 0x01, 0x01)
 #define GC2053_NAME             "gc2053"
 #define GC2053_MEDIA_BUS_FMT    MEDIA_BUS_FMT_SGRBG10_1X10
 
@@ -48,6 +49,9 @@
 
 #define GC2053_REG_EXP_H        0x03
 #define GC2053_REG_EXP_L        0x04
+
+#define GC2053_REG_VTS_H        0x41
+#define GC2053_REG_VTS_L        0x42
 
 #define GC2053_REG_CTRL_MODE    0x3E
 #define GC2053_MODE_SW_STANDBY  0x11
@@ -522,6 +526,7 @@ static int gc2053_set_ctrl(struct v4l2_ctrl *ctrl)
 	struct i2c_client *client = gc2053->client;
 	s64 max;
 	int ret = 0;
+	u32 vts = 0;
 
 	/* Propagate change of current control to all related controls */
 	switch (ctrl->id) {
@@ -535,7 +540,7 @@ static int gc2053_set_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	}
 
-	if (pm_runtime_get(&client->dev) <= 0)
+	if (!pm_runtime_get_if_in_use(&client->dev))
 		return 0;
 
 	switch (ctrl->id) {
@@ -549,7 +554,9 @@ static int gc2053_set_ctrl(struct v4l2_ctrl *ctrl)
 		gc2053_set_gain(gc2053, ctrl->val);
 		break;
 	case V4L2_CID_VBLANK:
-		/* The exposure goes up and reduces the frame rate, no need to write vb */
+		vts = ctrl->val + gc2053->cur_mode->height;
+		ret = gc2053_write_reg(gc2053->client, GC2053_REG_VTS_H, (vts >> 8) & 0x3f);
+		ret |= gc2053_write_reg(gc2053->client, GC2053_REG_VTS_L, vts & 0xff);
 		break;
 	case V4L2_CID_HFLIP:
 		if (ctrl->val)
@@ -882,6 +889,7 @@ static long gc2053_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	struct gc2053 *gc2053 = to_gc2053(sd);
 	long ret = 0;
 	struct rkmodule_hdr_cfg *hdr_cfg;
+	u32 stream = 0;
 
 	switch (cmd) {
 	case RKMODULE_GET_HDR_CFG:
@@ -901,6 +909,17 @@ static long gc2053_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	case RKMODULE_LSC_CFG:
 		gc2053_set_lsc_cfg(gc2053, (struct rkmodule_lsc_cfg *)arg);
 		break;
+	case RKMODULE_SET_QUICK_STREAM:
+
+		stream = *((u32 *)arg);
+
+		if (stream)
+			ret = gc2053_write_reg(gc2053->client, GC2053_REG_CTRL_MODE,
+					       GC2053_MODE_STREAMING);
+		else
+			ret = gc2053_write_reg(gc2053->client, GC2053_REG_CTRL_MODE,
+					       GC2053_MODE_SW_STANDBY);
+		break;
 	default:
 		ret = -ENOTTY;
 		break;
@@ -919,6 +938,7 @@ static long gc2053_compat_ioctl32(struct v4l2_subdev *sd,
 	struct rkmodule_hdr_cfg *hdr;
 	long ret = 0;
 	u32 cg = 0;
+	u32 stream = 0;
 
 	switch (cmd) {
 	case RKMODULE_GET_MODULE_INFO:
@@ -985,6 +1005,11 @@ static long gc2053_compat_ioctl32(struct v4l2_subdev *sd,
 		ret = copy_from_user(&cg, up, sizeof(cg));
 		if (!ret)
 			ret = gc2053_ioctl(sd, cmd, &cg);
+		break;
+	case RKMODULE_SET_QUICK_STREAM:
+		ret = copy_from_user(&stream, up, sizeof(u32));
+		if (!ret)
+			ret = gc2053_ioctl(sd, cmd, &stream);
 		break;
 	default:
 		ret = -ENOTTY;

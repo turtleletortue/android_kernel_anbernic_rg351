@@ -112,6 +112,11 @@ enum rkcif_inf_id {
 	RKCIF_MIPI_LVDS,
 };
 
+enum rkcif_clk_edge {
+	RKCIF_CLK_RISING = 0x0,
+	RKCIF_CLK_FALLING,
+};
+
 /*
  * for distinguishing cropping from senosr or usr
  */
@@ -219,6 +224,7 @@ struct cif_input_fmt {
 	u32 mbus_code;
 	u32 dvp_fmt_val;
 	u32 csi_fmt_val;
+	u32 csi_yuv_order;
 	enum cif_fmt_type fmt_type;
 	enum v4l2_field field;
 };
@@ -333,6 +339,11 @@ struct rkcif_timer {
 	enum rkcif_reset_src	reset_src;
 };
 
+struct rkcif_extend_info {
+	struct v4l2_pix_format_mplane	pixm;
+	bool is_extended;
+};
+
 /*
  * struct rkcif_stream - Stream states TODO
  *
@@ -373,6 +384,7 @@ struct rkcif_stream {
 	struct v4l2_pix_format_mplane	pixm;
 	struct v4l2_rect		crop[CROP_SRC_MAX];
 	struct rkcif_fps_stats		fps_stats;
+	struct rkcif_extend_info	extend_line;
 };
 
 struct rkcif_lvds_subdev {
@@ -386,6 +398,12 @@ struct rkcif_lvds_subdev {
 	const struct cif_input_fmt	*cif_fmt_in;
 	enum rkcif_lvds_state		state;
 	struct rkcif_sensor_info	sensor_self;
+	atomic_t			frm_sync_seq;
+};
+
+struct rkcif_dvp_sof_subdev {
+	struct rkcif_device *cifdev;
+	struct v4l2_subdev sd;
 	atomic_t			frm_sync_seq;
 };
 
@@ -451,7 +469,7 @@ struct rkcif_device {
 	struct rkcif_buffer		*rdbk_buf[RDBK_MAX];
 	struct rkcif_luma_vdev		luma_vdev;
 	struct rkcif_lvds_subdev	lvds_subdev;
-
+	struct rkcif_dvp_sof_subdev	dvp_sof_subdev;
 	struct rkcif_hw *hw_dev;
 	irqreturn_t (*isr_hdl)(int irq, struct rkcif_device *cif_dev);
 	int inf_id;
@@ -466,6 +484,8 @@ struct rkcif_device {
 	struct rkcif_work_struct	reset_work;
 	struct rkcif_timer		reset_watchdog_timer;
 	unsigned int			buf_wake_up_cnt;
+
+	bool				iommu_en;
 };
 
 extern struct platform_driver rkcif_plat_drv;
@@ -494,6 +514,8 @@ void rkcif_soft_reset(struct rkcif_device *cif_dev,
 		      bool is_rst_iommu);
 int rkcif_register_lvds_subdev(struct rkcif_device *dev);
 void rkcif_unregister_lvds_subdev(struct rkcif_device *dev);
+int rkcif_register_dvp_sof_subdev(struct rkcif_device *dev);
+void rkcif_unregister_dvp_sof_subdev(struct rkcif_device *dev);
 void rkcif_irq_lite_lvds(struct rkcif_device *cif_dev);
 u32 rkcif_get_sof(struct rkcif_device *cif_dev);
 int rkcif_plat_init(struct rkcif_device *cif_dev, struct device_node *node, int inf_id);
@@ -502,5 +524,7 @@ int rkcif_attach_hw(struct rkcif_device *cif_dev);
 int rkcif_update_sensor_info(struct rkcif_stream *stream);
 int rkcif_reset_notifier(struct notifier_block *nb, unsigned long action, void *data);
 void rkcif_reset_watchdog_timer_handler(struct timer_list *t);
+void rkcif_config_dvp_clk_sampling_edge(struct rkcif_device *dev,
+					enum rkcif_clk_edge edge);
 
 #endif

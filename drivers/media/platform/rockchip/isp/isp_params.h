@@ -29,6 +29,8 @@ struct rkisp_isp_params_ops {
 				struct rkisp_ldchbuf_info *ldchbuf);
 	void (*set_ldchbuf_size)(struct rkisp_isp_params_vdev *params_vdev,
 				 struct rkisp_ldchbuf_size *ldchsize);
+	void (*stream_stop)(struct rkisp_isp_params_vdev *params_vdev);
+	void (*fop_release)(struct rkisp_isp_params_vdev *params_vdev);
 };
 
 /*
@@ -46,10 +48,12 @@ struct rkisp_isp_params_vdev {
 	union {
 		struct rkisp1_isp_params_cfg *isp1x_params;
 		struct isp2x_isp_params_cfg *isp2x_params;
+		struct isp21_isp_params_cfg *isp21_params;
 	};
 	struct v4l2_format vdev_fmt;
 	bool streamon;
 	bool first_params;
+	bool first_cfg_params;
 	bool hdrtmo_en;
 
 	enum v4l2_quantization quantization;
@@ -68,9 +72,12 @@ struct rkisp_isp_params_vdev {
 
 	struct isp2x_hdrtmo_cfg last_hdrtmo;
 	struct isp2x_hdrmge_cfg last_hdrmge;
+	struct isp21_drc_cfg last_hdrdrc;
 	struct isp2x_hdrtmo_cfg cur_hdrtmo;
 	struct isp2x_hdrmge_cfg cur_hdrmge;
+	struct isp21_drc_cfg cur_hdrdrc;
 	struct isp2x_lsc_cfg cur_lsccfg;
+	struct sensor_exposure_cfg exposure;
 };
 
 /* config params before ISP streaming */
@@ -95,5 +102,6 @@ void rkisp_params_get_ldchbuf_inf(struct rkisp_isp_params_vdev *params_vdev,
 				  struct rkisp_ldchbuf_info *ldchbuf);
 void rkisp_params_set_ldchbuf_size(struct rkisp_isp_params_vdev *params_vdev,
 				   struct rkisp_ldchbuf_size *ldchsize);
+void rkisp_params_stream_stop(struct rkisp_isp_params_vdev *params_vdev);
 
 #endif /* _RKISP_ISP_PARAM_H */

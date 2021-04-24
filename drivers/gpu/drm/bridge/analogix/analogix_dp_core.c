@@ -43,6 +43,20 @@ struct bridge_init {
 	struct device_node *node;
 };
 
+static bool analogix_dp_bandwidth_ok(struct analogix_dp_device *dp,
+				     const struct drm_display_mode *mode,
+				     unsigned int rate, unsigned int lanes)
+{
+	u32 max_bw, req_bw, bpp = 24;
+
+	req_bw = mode->clock * bpp / 8;
+	max_bw = lanes * rate;
+	if (req_bw > max_bw)
+		return false;
+
+	return true;
+}
+
 static int analogix_dp_init_dp(struct analogix_dp_device *dp)
 {
 	int ret;
@@ -303,6 +317,8 @@ static int analogix_dp_set_enhanced_mode(struct analogix_dp_device *dp)
 
 	analogix_dp_enable_enhanced_mode(dp, data);
 
+	dp->link_train.enhanced_framing = data;
+
 	return 0;
 }
 
@@ -318,32 +334,10 @@ static int analogix_dp_training_pattern_dis(struct analogix_dp_device *dp)
 	return ret < 0 ? ret : 0;
 }
 
-static void
-analogix_dp_set_lane_lane_pre_emphasis(struct analogix_dp_device *dp,
-				       int pre_emphasis, int lane)
-{
-	switch (lane) {
-	case 0:
-		analogix_dp_set_lane0_pre_emphasis(dp, pre_emphasis);
-		break;
-	case 1:
-		analogix_dp_set_lane1_pre_emphasis(dp, pre_emphasis);
-		break;
-
-	case 2:
-		analogix_dp_set_lane2_pre_emphasis(dp, pre_emphasis);
-		break;
-
-	case 3:
-		analogix_dp_set_lane3_pre_emphasis(dp, pre_emphasis);
-		break;
-	}
-}
-
 static int analogix_dp_link_start(struct analogix_dp_device *dp)
 {
 	u8 buf[4];
-	int lane, lane_count, pll_tries, retval;
+	int lane, lane_count, retval;
 
 	lane_count = dp->link_train.lane_count;
 
@@ -363,6 +357,14 @@ static int analogix_dp_link_start(struct analogix_dp_device *dp)
 	retval = drm_dp_dpcd_write(&dp->aux, DP_LINK_BW_SET, buf, 2);
 	if (retval < 0)
 		return retval;
+
+	/* Spread AMP if required, enable 8b/10b coding */
+	buf[0] = analogix_dp_ssc_supported(dp) ? DP_SPREAD_AMP_0_5 : 0;
+	buf[1] = DP_SET_ANSI_8B10B;
+	retval = drm_dp_dpcd_write(&dp->aux, DP_DOWNSPREAD_CTRL, buf, 2);
+	if (retval < 0)
+		return retval;
+
 	/* set enhanced mode if available */
 	retval = analogix_dp_set_enhanced_mode(dp);
 	if (retval < 0) {
@@ -370,22 +372,12 @@ static int analogix_dp_link_start(struct analogix_dp_device *dp)
 		return retval;
 	}
 
-	/* Set TX pre-emphasis to minimum */
+	/* Set TX voltage-swing and pre-emphasis to minimum */
 	for (lane = 0; lane < lane_count; lane++)
-		analogix_dp_set_lane_lane_pre_emphasis(dp,
-			PRE_EMPHASIS_LEVEL_0, lane);
-
-	/* Wait for PLL lock */
-	pll_tries = 0;
-	while (analogix_dp_get_pll_lock_status(dp) == PLL_UNLOCKED) {
-		if (pll_tries == DP_TIMEOUT_LOOP_COUNT) {
-			dev_err(dp->dev, "Wait for PLL lock timed out\n");
-			return -ETIMEDOUT;
-		}
-
-		pll_tries++;
-		usleep_range(90, 120);
-	}
+		dp->link_train.training_lane[lane] =
+					DP_TRAIN_VOLTAGE_SWING_LEVEL_0 |
+					DP_TRAIN_PRE_EMPH_LEVEL_0;
+	analogix_dp_set_lane_link_training(dp);
 
 	/* Set training pattern 1 */
 	analogix_dp_set_training_pattern(dp, TRAINING_PTN1);
@@ -466,54 +458,6 @@ static unsigned char analogix_dp_get_adjust_request_pre_emphasis(
 	u8 link_value = adjust_request[lane >> 1];
 
 	return ((link_value >> shift) & 0xc) >> 2;
-}
-
-static void analogix_dp_set_lane_link_training(struct analogix_dp_device *dp,
-					       u8 training_lane_set, int lane)
-{
-	switch (lane) {
-	case 0:
-		analogix_dp_set_lane0_link_training(dp, training_lane_set);
-		break;
-	case 1:
-		analogix_dp_set_lane1_link_training(dp, training_lane_set);
-		break;
-
-	case 2:
-		analogix_dp_set_lane2_link_training(dp, training_lane_set);
-		break;
-
-	case 3:
-		analogix_dp_set_lane3_link_training(dp, training_lane_set);
-		break;
-	}
-}
-
-static unsigned int
-analogix_dp_get_lane_link_training(struct analogix_dp_device *dp,
-				   int lane)
-{
-	u32 reg;
-
-	switch (lane) {
-	case 0:
-		reg = analogix_dp_get_lane0_link_training(dp);
-		break;
-	case 1:
-		reg = analogix_dp_get_lane1_link_training(dp);
-		break;
-	case 2:
-		reg = analogix_dp_get_lane2_link_training(dp);
-		break;
-	case 3:
-		reg = analogix_dp_get_lane3_link_training(dp);
-		break;
-	default:
-		WARN_ON(1);
-		return 0;
-	}
-
-	return reg;
 }
 
 static void analogix_dp_reduce_link_rate(struct analogix_dp_device *dp)
@@ -606,10 +550,7 @@ static int analogix_dp_process_clock_recovery(struct analogix_dp_device *dp)
 		}
 
 		analogix_dp_get_adjust_training_lane(dp, adjust_request);
-
-		for (lane = 0; lane < lane_count; lane++)
-			analogix_dp_set_lane_link_training(dp,
-				dp->link_train.training_lane[lane], lane);
+		analogix_dp_set_lane_link_training(dp);
 
 		retval = drm_dp_dpcd_write(&dp->aux, DP_TRAINING_LANE0_SET,
 					   dp->link_train.training_lane,
@@ -623,7 +564,7 @@ static int analogix_dp_process_clock_recovery(struct analogix_dp_device *dp)
 
 static int analogix_dp_process_equalizer_training(struct analogix_dp_device *dp)
 {
-	int lane, lane_count, retval;
+	int lane_count, retval;
 	u32 reg;
 	u8 link_align, link_status[2], adjust_request[2];
 
@@ -683,9 +624,7 @@ static int analogix_dp_process_equalizer_training(struct analogix_dp_device *dp)
 		return -EIO;
 	}
 
-	for (lane = 0; lane < lane_count; lane++)
-		analogix_dp_set_lane_link_training(dp,
-			dp->link_train.training_lane[lane], lane);
+	analogix_dp_set_lane_link_training(dp);
 
 	retval = drm_dp_dpcd_write(&dp->aux, DP_TRAINING_LANE0_SET,
 				   dp->link_train.training_lane, lane_count);
@@ -728,6 +667,7 @@ static int analogix_dp_full_link_train(struct analogix_dp_device *dp,
 {
 	int retval = 0;
 	bool training_finished = false;
+	u8 dpcd;
 
 	/*
 	 * MACRO_RST must be applied after the PLL_LOCK to avoid
@@ -752,6 +692,9 @@ static int analogix_dp_full_link_train(struct analogix_dp_device *dp,
 			dp->link_train.lane_count);
 		dp->link_train.lane_count = (u8)LANE_COUNT1;
 	}
+
+	drm_dp_dpcd_readb(&dp->aux, DP_MAX_DOWNSPREAD, &dpcd);
+	dp->link_train.ssc = !!(dpcd & DP_MAX_DOWNSPREAD_0_5);
 
 	/* Setup TX lane count & rate */
 	if (dp->link_train.lane_count > max_lanes)
@@ -797,27 +740,15 @@ static int analogix_dp_full_link_train(struct analogix_dp_device *dp,
 
 static int analogix_dp_fast_link_train(struct analogix_dp_device *dp)
 {
-	int i, ret;
+	int ret;
 	u8 link_align, link_status[2];
-	enum pll_status status;
 
 	analogix_dp_reset_macro(dp);
 
 	analogix_dp_set_link_bandwidth(dp, dp->link_train.link_rate);
 	analogix_dp_set_lane_count(dp, dp->link_train.lane_count);
-
-	for (i = 0; i < dp->link_train.lane_count; i++) {
-		analogix_dp_set_lane_link_training(dp,
-			dp->link_train.training_lane[i], i);
-	}
-
-	ret = readx_poll_timeout(analogix_dp_get_pll_lock_status, dp, status,
-				 status != PLL_UNLOCKED, 120,
-				 120 * DP_TIMEOUT_LOOP_COUNT);
-	if (ret) {
-		DRM_DEV_ERROR(dp->dev, "Wait for pll lock failed %d\n", ret);
-		return ret;
-	}
+	analogix_dp_set_lane_link_training(dp);
+	analogix_dp_enable_enhanced_mode(dp, dp->link_train.enhanced_framing);
 
 	/* source Set training pattern 1 */
 	analogix_dp_set_training_pattern(dp, TRAINING_PTN1);
@@ -828,7 +759,6 @@ static int analogix_dp_fast_link_train(struct analogix_dp_device *dp)
 	/* From DP spec, pattern must be on-screen for a minimum 500us */
 	usleep_range(500, 600);
 
-	/* TODO: enhanced_mode?*/
 	analogix_dp_set_training_pattern(dp, DP_NONE);
 
 	/*
@@ -1049,6 +979,13 @@ static int analogix_dp_commit(struct analogix_dp_device *dp)
 		return ret;
 	}
 
+	if (!analogix_dp_bandwidth_ok(dp, &video->mode,
+				      drm_dp_bw_code_to_link_rate(dp->link_train.link_rate),
+				      dp->link_train.lane_count)) {
+		dev_err(dp->dev, "bandwidth overflow\n");
+		return -EINVAL;
+	}
+
 	ret = analogix_dp_enable_scramble(dp, 1);
 	if (ret < 0) {
 		dev_err(dp->dev, "can not enable scramble\n");
@@ -1151,11 +1088,6 @@ static int analogix_dp_loader_protect(struct drm_connector *connector, bool on)
 		ret = analogix_dp_detect_sink_psr(dp);
 		if (ret)
 			return ret;
-
-		/* Check whether panel supports fast training */
-		ret = analogix_dp_fast_link_train_detection(dp);
-		if (ret)
-			dp->psr_enable = false;
 
 		if (dp->psr_enable) {
 			ret = analogix_dp_enable_sink_psr(dp);
@@ -1288,7 +1220,7 @@ static int analogix_dp_set_bridge(struct analogix_dp_device *dp)
 	if (dp->plat_data->power_on_start)
 		dp->plat_data->power_on_start(dp->plat_data);
 
-	phy_power_on(dp->phy);
+	analogix_dp_phy_power_on(dp);
 
 	ret = analogix_dp_init_dp(dp);
 	if (ret)
@@ -1318,7 +1250,7 @@ static int analogix_dp_set_bridge(struct analogix_dp_device *dp)
 	return 0;
 
 out_dp_init:
-	phy_power_off(dp->phy);
+	analogix_dp_phy_power_off(dp);
 	if (dp->plat_data->power_off)
 		dp->plat_data->power_off(dp->plat_data);
 	clk_disable_unprepare(dp->clock);
@@ -1370,7 +1302,7 @@ static void analogix_dp_bridge_disable(struct drm_bridge *bridge)
 		dp->plat_data->power_off(dp->plat_data);
 
 	analogix_dp_set_analog_power_down(dp, POWER_ALL, 1);
-	phy_power_off(dp->phy);
+	analogix_dp_phy_power_off(dp);
 
 	clk_disable_unprepare(dp->clock);
 
@@ -1468,6 +1400,20 @@ static void analogix_dp_bridge_mode_set(struct drm_bridge *bridge,
 		video->interlaced = true;
 }
 
+static enum drm_mode_status
+analogix_dp_bridge_mode_valid(struct drm_bridge *bridge,
+			      const struct drm_display_mode *mode)
+{
+	struct analogix_dp_device *dp = bridge->driver_private;
+
+	if (!analogix_dp_bandwidth_ok(dp, mode,
+				      drm_dp_bw_code_to_link_rate(dp->video_info.max_link_rate),
+				      dp->video_info.max_lane_count))
+		return MODE_BAD;
+
+	return MODE_OK;
+}
+
 static void analogix_dp_bridge_nop(struct drm_bridge *bridge)
 {
 	/* do nothing */
@@ -1480,6 +1426,7 @@ static const struct drm_bridge_funcs analogix_dp_bridge_funcs = {
 	.post_disable = analogix_dp_bridge_nop,
 	.mode_set = analogix_dp_bridge_mode_set,
 	.attach = analogix_dp_bridge_attach,
+	.mode_valid = analogix_dp_bridge_mode_valid,
 };
 
 static int analogix_dp_create_bridge(struct drm_device *drm_dev,
@@ -1517,6 +1464,7 @@ static int analogix_dp_dt_parse_pdata(struct analogix_dp_device *dp)
 	case RK3288_DP:
 	case RK3368_EDP:
 	case RK3399_EDP:
+	case RK3568_EDP:
 		video_info->max_link_rate = 0x0A;
 		video_info->max_lane_count = 0x04;
 		break;
@@ -1545,6 +1493,48 @@ static ssize_t analogix_dpaux_transfer(struct drm_dp_aux *aux,
 
 	return analogix_dp_transfer(dp, msg);
 }
+
+int analogix_dp_audio_hw_params(struct analogix_dp_device *dp,
+				struct hdmi_codec_daifmt *daifmt,
+				struct hdmi_codec_params *params)
+{
+	switch (daifmt->fmt) {
+	case HDMI_SPDIF:
+		analogix_dp_audio_config_spdif(dp);
+		break;
+	case HDMI_I2S:
+		analogix_dp_audio_config_i2s(dp);
+		break;
+	default:
+		DRM_DEV_ERROR(dp->dev, "invalid daifmt %d\n", daifmt->fmt);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(analogix_dp_audio_hw_params);
+
+void analogix_dp_audio_shutdown(struct analogix_dp_device *dp)
+{
+	analogix_dp_audio_disable(dp);
+}
+EXPORT_SYMBOL_GPL(analogix_dp_audio_shutdown);
+
+int analogix_dp_audio_startup(struct analogix_dp_device *dp)
+{
+	analogix_dp_audio_enable(dp);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(analogix_dp_audio_startup);
+
+int analogix_dp_audio_get_eld(struct analogix_dp_device *dp, u8 *buf, size_t len)
+{
+	memcpy(buf, dp->connector.eld, min(sizeof(dp->connector.eld), len));
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(analogix_dp_audio_get_eld);
 
 struct analogix_dp_device *
 analogix_dp_bind(struct device *dev, struct drm_device *drm_dev,

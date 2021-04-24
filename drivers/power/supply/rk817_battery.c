@@ -493,6 +493,7 @@ struct rk817_battery_device {
 	struct workqueue_struct		*bat_monitor_wq;
 	struct delayed_work		bat_delay_work;
 	struct delayed_work		calib_delay_work;
+	struct work_struct		resume_work;
 	struct wake_lock		wake_lock;
 	struct timer_list		caltimer;
 
@@ -620,7 +621,10 @@ struct rk817_battery_device {
 	int				plugout_irq;
 	int				chip_id;
 	int				is_register_chg_psy;
+	bool				change; /* Battery status change, report information */
 };
+
+static void rk817_bat_resume_work(struct work_struct *work);
 
 static u64 get_boot_sec(void)
 {
@@ -1412,7 +1416,7 @@ static int rk817_bat_get_charge_status(struct rk817_battery_device *battery)
  */
 static bool rk817_bat_fake_finish_mode(struct rk817_battery_device *battery)
 {
-	if ((battery->rsoc == 100) &&
+	if ((battery->rsoc / 1000 == 100) &&
 	    (rk817_bat_get_charge_status(battery) == CC_OR_CV_CHRG) &&
 	    (abs(battery->current_avg) <= 100))
 		return true;
@@ -2222,9 +2226,10 @@ static void rk817_bat_power_supply_changed(struct rk817_battery_device *battery)
 	else if (battery->dsoc < 0)
 		battery->dsoc = 0;
 
-	if (battery->dsoc == old_soc)
+	if (battery->dsoc == old_soc && !battery->change)
 		return;
 
+	battery->change = false;
 	old_soc = battery->dsoc;
 	battery->last_dsoc = battery->dsoc;
 	power_supply_changed(battery->bat);
@@ -2275,6 +2280,7 @@ rk817_bat_update_charging_status(struct rk817_battery_device *battery)
 	if (is_charging == battery->is_charging)
 		return;
 
+	battery->change = true;
 	battery->is_charging = is_charging;
 	if (is_charging)
 		battery->charge_count++;
@@ -2425,7 +2431,7 @@ static void rk817_bat_smooth_algorithm(struct rk817_battery_device *battery)
 	}
 
 	/* discharge: sm_linek < 0, if delate_cap <0, ydsoc > 0 */
-	ydsoc = battery->sm_linek * abs(delta_cap / DIV(battery->fcc)) / 10;
+	ydsoc = battery->sm_linek * abs(delta_cap / 10) / DIV(battery->fcc);
 
 	DBG("smooth: ydsoc = %d, fcc = %d\n", ydsoc, battery->fcc);
 	if (ydsoc == 0) {
@@ -2592,7 +2598,7 @@ static void rk817_bat_calc_zero_linek(struct rk817_battery_device *battery)
 			battery->zero_linek = 1200;
 			DBG("ZERO-new: zero_linek adjust step3...\n");
 		/* dsoc[5~15], dsoc < xsoc */
-		} else if ((battery->dsoc / 1000 <= 15 && battery->dsoc > 5) &&
+		} else if ((battery->dsoc / 1000 <= 15 && battery->dsoc / 1000 > 5) &&
 			   (battery->zero_linek <= 1200)) {
 			/* slow down */
 			if ((xsoc - battery->dsoc / 1000) >= min_gap_xsoc)
@@ -2728,6 +2734,14 @@ static void rk817_bat_zero_algorithm(struct rk817_battery_device *battery)
 		battery->zero_dsoc -= delta_soc;
 		rk817_bat_calc_zero_algorithm(battery);
 		DBG("Zero: dsoc: %d\n", battery->dsoc);
+		rk817_bat_calc_zero_linek(battery);
+	}
+
+	if ((battery->rsoc / 1000 < 1) &&
+	    (battery->zero_batocv_to_cap > battery->fcc / 100)) {
+		DBG("ZERO2:---------check step1 -----------\n");
+		rk817_bat_init_coulomb_cap(battery,
+					   battery->zero_batocv_to_cap);
 		rk817_bat_calc_zero_linek(battery);
 	}
 }
@@ -3030,6 +3044,7 @@ static int rk817_battery_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&battery->bat_delay_work, rk817_battery_work);
 	queue_delayed_work(battery->bat_monitor_wq, &battery->bat_delay_work,
 			   msecs_to_jiffies(TIMER_MS_COUNTS * 5));
+	INIT_WORK(&battery->resume_work, rk817_bat_resume_work);
 
 	ret = rk817_bat_init_power_supply(battery);
 	if (ret) {
@@ -3305,10 +3320,9 @@ static int rk817_bat_sleep_dischrg(struct rk817_battery_device *battery)
 	return sleep_soc;
 }
 
-static int rk817_bat_pm_resume(struct device *dev)
+static void rk817_bat_resume_work(struct work_struct *work)
 {
-	struct platform_device *pdev = to_platform_device(dev);
-	struct rk817_battery_device *battery = dev_get_drvdata(&pdev->dev);
+	struct rk817_battery_device *battery = container_of(work, struct rk817_battery_device, resume_work);
 	int interval_sec = 0, time_step = 0, pwroff_vol;
 
 	battery->s2r = true;
@@ -3355,6 +3369,13 @@ static int rk817_bat_pm_resume(struct device *dev)
 
 	queue_delayed_work(battery->bat_monitor_wq, &battery->bat_delay_work,
 			   msecs_to_jiffies(1000));
+}
+
+static int rk817_bat_pm_resume(struct device *dev)
+{
+	struct rk817_battery_device *battery = dev_get_drvdata(dev);
+
+	queue_work(battery->bat_monitor_wq, &battery->resume_work);
 
 	return 0;
 }

@@ -5,6 +5,7 @@
  * v0.1.0x00 : 1. create file.
  * V0.0X01.0X02 fix mclk issue when probe multiple camera.
  * V0.0X01.0X03 add enum_frame_interval function.
+ * V0.0X01.0X04 add quick stream on/off
  */
 
 #include <linux/clk.h>
@@ -34,7 +35,7 @@
 #include <media/v4l2-mediabus.h>
 #include <media/v4l2-subdev.h>
 
-#define DRIVER_VERSION			KERNEL_VERSION(0, 0x01, 0x03)
+#define DRIVER_VERSION			KERNEL_VERSION(0, 0x01, 0x04)
 
 #ifndef V4L2_CID_DIGITAL_GAIN
 #define V4L2_CID_DIGITAL_GAIN		V4L2_CID_GAIN
@@ -62,7 +63,7 @@
 #define OV8858_GAIN_H_SHIFT		8
 #define OV8858_GAIN_L_MASK		0xff
 #define OV8858_GAIN_MIN			0x80
-#define OV8858_GAIN_MAX			0x400
+#define OV8858_GAIN_MAX			0x7ff
 #define OV8858_GAIN_STEP		1
 #define OV8858_GAIN_DEFAULT		0x80
 
@@ -183,6 +184,7 @@ struct ov8858 {
 	unsigned int		lane_num;
 	unsigned int		cfg_num;
 	unsigned int		pixel_rate;
+	bool			power_on;
 
 	struct ov8858_otp_info_r1a *otp_r1a;
 	struct ov8858_otp_info_r2a *otp_r2a;
@@ -1334,7 +1336,7 @@ static const struct ov8858_mode supported_modes_2lane[] = {
 			.denominator = 150000,
 		},
 		.exp_def = 0x09a0,
-		.hts_def = 0x0794,
+		.hts_def = 0x0794 * 2,
 		.vts_def = 0x09aa,
 		.reg_list = ov8858_3264x2448_regs_2lane,
 	},
@@ -1361,7 +1363,7 @@ static const struct ov8858_mode supported_modes_4lane[] = {
 			.denominator = 300000,
 		},
 		.exp_def = 0x09a0,
-		.hts_def = 0x0794,
+		.hts_def = 0x0794 * 2,
 		.vts_def = 0x09aa,
 		.reg_list = ov8858_3264x2448_regs_4lane,
 	},
@@ -1799,6 +1801,7 @@ static long ov8858_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 	struct ov8858 *ov8858 = to_ov8858(sd);
 	long ret = 0;
+	u32 stream = 0;
 
 	switch (cmd) {
 	case RKMODULE_GET_MODULE_INFO:
@@ -1809,6 +1812,21 @@ static long ov8858_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 		break;
 	case RKMODULE_LSC_CFG:
 		ov8858_set_lsc_cfg(ov8858, (struct rkmodule_lsc_cfg *)arg);
+		break;
+	case RKMODULE_SET_QUICK_STREAM:
+
+		stream = *((u32 *)arg);
+
+		if (stream)
+			ret = ov8858_write_reg(ov8858->client,
+				OV8858_REG_CTRL_MODE,
+				OV8858_REG_VALUE_08BIT,
+				OV8858_MODE_STREAMING);
+		else
+			ret = ov8858_write_reg(ov8858->client,
+				OV8858_REG_CTRL_MODE,
+				OV8858_REG_VALUE_08BIT,
+				OV8858_MODE_SW_STANDBY);
 		break;
 	default:
 		ret = -ENOTTY;
@@ -1827,6 +1845,7 @@ static long ov8858_compat_ioctl32(struct v4l2_subdev *sd,
 	struct rkmodule_awb_cfg *awb_cfg;
 	struct rkmodule_lsc_cfg *lsc_cfg;
 	long ret = 0;
+	u32 stream = 0;
 
 	switch (cmd) {
 	case RKMODULE_GET_MODULE_INFO:
@@ -1864,6 +1883,11 @@ static long ov8858_compat_ioctl32(struct v4l2_subdev *sd,
 		if (!ret)
 			ret = ov8858_ioctl(sd, cmd, lsc_cfg);
 		kfree(lsc_cfg);
+		break;
+	case RKMODULE_SET_QUICK_STREAM:
+		ret = copy_from_user(&stream, up, sizeof(u32));
+		if (!ret)
+			ret = ov8858_ioctl(sd, cmd, &stream);
 		break;
 	default:
 		ret = -ENOTTY;
@@ -2055,10 +2079,6 @@ static int __ov8858_start_stream(struct ov8858 *ov8858)
 {
 	int ret;
 
-	ret = ov8858_write_array(ov8858->client, ov8858_global_regs);
-	if (ret)
-		return ret;
-
 	ret = ov8858_write_array(ov8858->client, ov8858->cur_mode->reg_list);
 	if (ret)
 		return ret;
@@ -2118,6 +2138,44 @@ static int ov8858_s_stream(struct v4l2_subdev *sd, int on)
 	}
 
 	ov8858->streaming = on;
+
+unlock_and_return:
+	mutex_unlock(&ov8858->mutex);
+
+	return ret;
+}
+
+static int ov8858_s_power(struct v4l2_subdev *sd, int on)
+{
+	struct ov8858 *ov8858 = to_ov8858(sd);
+	struct i2c_client *client = ov8858->client;
+	int ret = 0;
+
+	mutex_lock(&ov8858->mutex);
+
+	/* If the power state is not modified - no work to do. */
+	if (ov8858->power_on == !!on)
+		goto unlock_and_return;
+
+	if (on) {
+		ret = pm_runtime_get_sync(&client->dev);
+		if (ret < 0) {
+			pm_runtime_put_noidle(&client->dev);
+			goto unlock_and_return;
+		}
+
+		ret = ov8858_write_array(ov8858->client, ov8858_global_regs);
+		if (ret) {
+			v4l2_err(sd, "could not set init registers\n");
+			pm_runtime_put_noidle(&client->dev);
+			goto unlock_and_return;
+		}
+
+		ov8858->power_on = true;
+	} else {
+		pm_runtime_put(&client->dev);
+		ov8858->power_on = false;
+	}
 
 unlock_and_return:
 	mutex_unlock(&ov8858->mutex);
@@ -2283,6 +2341,7 @@ static const struct v4l2_subdev_internal_ops ov8858_internal_ops = {
 #endif
 
 static const struct v4l2_subdev_core_ops ov8858_core_ops = {
+	.s_power = ov8858_s_power,
 	.ioctl = ov8858_ioctl,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl32 = ov8858_compat_ioctl32,
@@ -2328,18 +2387,20 @@ static int ov8858_set_ctrl(struct v4l2_ctrl *ctrl)
 		break;
 	}
 
-	if (pm_runtime_get(&client->dev) <= 0)
+	if (!pm_runtime_get_if_in_use(&client->dev))
 		return 0;
 
 	switch (ctrl->id) {
 	case V4L2_CID_EXPOSURE:
 		/* 4 least significant bits of expsoure are fractional part */
+		dev_dbg(&client->dev, "set exposure value 0x%x\n", ctrl->val);
 		ret = ov8858_write_reg(ov8858->client,
 					OV8858_REG_EXPOSURE,
 					OV8858_REG_VALUE_24BIT,
 					ctrl->val << 4);
 		break;
 	case V4L2_CID_ANALOGUE_GAIN:
+		dev_dbg(&client->dev, "set analog gain value 0x%x\n", ctrl->val);
 		ret = ov8858_write_reg(ov8858->client,
 					OV8858_REG_GAIN_H,
 					OV8858_REG_VALUE_08BIT,
@@ -2351,6 +2412,7 @@ static int ov8858_set_ctrl(struct v4l2_ctrl *ctrl)
 					ctrl->val & OV8858_GAIN_L_MASK);
 		break;
 	case V4L2_CID_VBLANK:
+		dev_dbg(&client->dev, "set vb value 0x%x\n", ctrl->val);
 		ret = ov8858_write_reg(ov8858->client,
 					OV8858_REG_VTS,
 					OV8858_REG_VALUE_16BIT,
@@ -2729,14 +2791,14 @@ static int ov8858_check_sensor_id(struct ov8858 *ov8858,
 			       OV8858_REG_VALUE_24BIT, &id);
 	if (id != CHIP_ID) {
 		dev_err(dev, "Unexpected sensor id(%06x), ret(%d)\n", id, ret);
-		return ret;
+		return -ENODEV;
 	}
 
 	ret = ov8858_read_reg(client, OV8858_CHIP_REVISION_REG,
 			       OV8858_REG_VALUE_08BIT, &id);
 	if (ret) {
 		dev_err(dev, "Read chip revision register error\n");
-		return ret;
+		return -ENODEV;
 	}
 	dev_info(dev, "Detected OV%06x sensor, REVISION 0x%x\n", CHIP_ID, id);
 

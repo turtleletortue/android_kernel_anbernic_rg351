@@ -24,6 +24,11 @@ struct esp_80211_nulldata {
 	struct ieee80211_hdr_3addr hdr;
 };
 
+enum esp_80211_phy_type {
+	PHY_TYPE_CCK,
+	PHY_TYPE_OFDM,
+};
+
 /*IE --------------------------------------------------------- */
 struct esp_80211_wmm_ac_param {
 	u8 aci_aifsn; 		/* AIFSN, ACM, ACI */

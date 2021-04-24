@@ -10,7 +10,7 @@
 #
 # Copyright (C) 1995-2001 by Russell King
 
-LDFLAGS_vmlinux	:=--no-undefined -X
+LDFLAGS_vmlinux	:=--no-undefined -X -z norelro
 CPPFLAGS_vmlinux.lds = -DTEXT_OFFSET=$(TEXT_OFFSET)
 GZFLAGS		:=-9
 
@@ -18,7 +18,7 @@ ifeq ($(CONFIG_RELOCATABLE), y)
 # Pass --no-apply-dynamic-relocs to restore pre-binutils-2.27 behaviour
 # for relative relocs, since this leads to better Image compression
 # with the relocation offsets always being zero.
-LDFLAGS_vmlinux		+= -shared -Bsymbolic -z notext -z norelro \
+LDFLAGS_vmlinux		+= -shared -Bsymbolic -z notext \
 			$(call ld-option, --no-apply-dynamic-relocs)
 endif
 
@@ -54,7 +54,7 @@ KBUILD_CFLAGS	+= -fno-asynchronous-unwind-tables
 KBUILD_CFLAGS	+= $(call cc-disable-warning, psabi)
 KBUILD_AFLAGS	+= $(lseinstr) $(brokengasinst) $(compat_vdso)
 
-KBUILD_CFLAGS	+= $(call cc-option, -march=armv8-a+crc+simd -mtune=cortex-a35)
+KBUILD_CFLAGS	+= $(call cc-option, -march=armv8-a+crc+simd -mtune=cortex-a35 -mcpu=cortex-a35 -ffast-math -fomit-frame-pointer)
 KBUILD_CFLAGS	+= $(call cc-option,-mabi=lp64)
 KBUILD_AFLAGS	+= $(call cc-option,-mabi=lp64)
 
@@ -156,6 +156,7 @@ dtbs_install:
 PHONY += vdso_install
 vdso_install:
 	$(Q)$(MAKE) $(build)=arch/arm64/kernel/vdso $@
+	$(Q)$(MAKE) $(build)=arch/arm64/kernel/vdso32 $@
 
 # We use MRPROPER_FILES and CLEAN_FILES now
 archclean:
@@ -188,19 +189,3 @@ define archhelp
   echo  '                  (distribution) /sbin/installkernel or'
   echo  '                  install to $$(INSTALL_PATH) and run lilo'
 endef
-
-kernel.img: Image.lz4
-	$(Q)scripts/mkkrnlimg $(objtree)/arch/arm64/boot/Image $(objtree)/kernel.img >/dev/null
-	@echo '  Image:  kernel.img is ready'
-ifdef CONFIG_MODULES
-	$(Q)if [ "$(srctree)" = "$(objtree)" ]; then $(MAKE) modules; fi
-endif
-
-LOGO := $(notdir $(wildcard $(srctree)/logo.bmp))
-LOGO_KERNEL := $(notdir $(wildcard $(srctree)/logo_kernel.bmp))
-
-%.img: rockchip/%.dtb kernel.img $(LOGO) $(LOGO_KERNEL)
-	$(Q)$(srctree)/scripts/mkimg --dtb $*.dtb
-
-CLEAN_DIRS += out
-CLEAN_FILES += boot.img kernel.img resource.img zboot.img

@@ -143,6 +143,24 @@
 		rockchip,pvtm-temp-prop = <(-56) (-56)>;
 		rockchip,thermal-zone = "soc-thermal";
 
+		opp-96000000 {
+			opp-hz = /bits/ 64 <96000000>;
+			opp-microvolt = <950000 950000 1350000>;
+			opp-microvolt-L0 = <950000 950000 1350000>;
+			opp-microvolt-L1 = <950000 950000 1350000>;
+			opp-microvolt-L2 = <950000 950000 1350000>;
+			opp-microvolt-L3 = <950000 950000 1350000>;
+			clock-latency-ns = <40000>;
+		};
+		opp-216000000 {
+			opp-hz = /bits/ 64 <216000000>;
+			opp-microvolt = <950000 950000 1350000>;
+			opp-microvolt-L0 = <950000 950000 1350000>;
+			opp-microvolt-L1 = <950000 950000 1350000>;
+			opp-microvolt-L2 = <950000 950000 1350000>;
+			opp-microvolt-L3 = <950000 950000 1350000>;
+			clock-latency-ns = <40000>;
+		};
 		opp-408000000 {
 			opp-hz = /bits/ 64 <408000000>;
 			opp-microvolt = <950000 950000 1350000>;
@@ -1915,8 +1933,15 @@
 			opp-microvolt-L1 = <1050000>;
 			opp-microvolt-L2 = <1025000>;
 			opp-microvolt-L3 = <1000000>;
-			status = "disabled";
 		};
+		opp-856000000 {
+			opp-hz = /bits/ 64 <856000000>;
+			opp-microvolt = <1100000>;
+			opp-microvolt-L0 = <1100000>;
+			opp-microvolt-L1 = <1050000>;
+			opp-microvolt-L2 = <1025000>;
+			opp-microvolt-L3 = <1000000>;
+		};		
 	};
 
 	rockchip_system_monitor: rockchip-system-monitor {

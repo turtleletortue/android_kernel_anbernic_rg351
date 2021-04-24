@@ -4,7 +4,7 @@
 #ifndef _RKISP_VERSION_H
 #define _RKISP_VERSION_H
 #include <linux/version.h>
-#include <linux/rkisp2-config.h>
+#include <linux/rkisp21-config.h>
 
 /*
  * RKISP DRIVER VERSION NOTE
@@ -58,6 +58,45 @@
  * 3. fix error status of stream off
  * 4. skip frame when change hdr/normal mode
  * 5. use ldch share buffer to reduce buffer size
+ *
+ * v1.2.0:
+ * 1. resolution write directly to reg for first dev
+ * 2. normal read back to enable hdr merge
+ * 3. enable LDCH in 2th frame
+ *
+ * v1.2.1:
+ * 1. fix normal merge enable config
+ * 2. fix size no update for multi sensor switch
+ * 3. dmatx add yuyv format
+ *
+ * v1.2.2:
+ * 1. isp/ispp add lock for multi dev runtime
+ * 2. support output isp/ispp reg on each frame
+ * 3. fix error detected by depmod
+ *
+ * v1.3.0:
+ * 1. capture to different version
+ * 2. add isp21
+ * 3. add rk3568 config
+ * 4. support iq part of isp21
+ * 5. remove hdrtmo to fix crash when connect to yuv sensor
+ * 6. fix enable function of ynr/cnr/bay3d/dhaz/adrc is not correct
+ * 7. fix can not get correct awb rawdata
+ * 8. add get awb data from ddr function
+ * 9. fix frame id error for isp21
+ * 10. config lsc by sram in rdbk mode
+ * 11. add force update to enable dehaze
+ * 12. fix bug of scheduling while atomic
+ * 13. fix setting drc register is not correct
+ * 14. extend line to fix merge bypass bug for isp20
+ * 15. vb2 dma sg for iommu enable
+ * 16. config dmatx to valid buf addr
+ *
+ * v1.4.1:
+ * 1. support motion detection mode
+ * 2. get stats only when meas done is on
+ * 3. fix lsc lut error in start/stop test
+ *
  */
 
 #define RKISP_DRIVER_VERSION RKISP_API_VERSION

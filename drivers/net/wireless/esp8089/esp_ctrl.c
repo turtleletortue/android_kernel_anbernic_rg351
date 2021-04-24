@@ -63,7 +63,7 @@ static void esp_tx_ba_session_op(struct esp_sip *sip, struct esp_node *node,
                         txtid->state = ESP_TID_STATE_TRIGGER;
                         spin_unlock_bh(&sip->epub->tx_ampdu_lock);
 
-       //                 ieee80211_start_tx_ba_session(node->sta, (u16)tid, 0);
+                        ieee80211_start_tx_ba_session(node->sta, (u16)tid, 0);
 
                 } else if(txtid->state == ESP_TID_STATE_OPERATIONAL) {
 			sip_send_ampdu_action(sip->epub, SIP_AMPDU_TX_OPERATIONAL, node->sta->addr, tid, node->ifidx, 0);
