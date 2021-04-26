@@ -34,6 +34,7 @@ dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3326-odroidgo3-linux.dtb
 dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3326-odroid-go2-v11.dtb
 dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3326-odroidgo2-linux.dtb
 dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3326-rg351p.dtb
+dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3326-rg351v.dtb
 dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3328-box-liantong.dtb
 dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3328-box-liantong-avb.dtb
 dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3328-evb.dtb
