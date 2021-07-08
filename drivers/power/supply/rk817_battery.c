@@ -2079,10 +2079,10 @@ static int rk817_battery_get_property(struct power_supply *psy,
 			val->intval = VIRTUAL_VOLTAGE * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		val->intval = (battery->dsoc  + 500) / 1000;
-		if (battery->pdata->bat_mode == MODE_VIRTUAL)
-			val->intval = VIRTUAL_SOC;
-		break;
+		val->intval = (rk817_bat_get_capacity_uah(battery) * 100 / DIV(battery->fcc)) / 1000;
+        if (battery->pdata->bat_mode == MODE_VIRTUAL)
+            val->intval = VIRTUAL_SOC;
+        break;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
 		val->intval = rk817_get_capacity_leve(battery);
 		break;
