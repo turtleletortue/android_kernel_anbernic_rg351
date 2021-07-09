@@ -1,3 +1,6 @@
 [submodule "fs/exfat"]
 	path = fs/exfat
 	url = https://github.com/arter97/exfat-linux/
+[submodule "drivers/net/wireless/realtek/rtl8188eus"]
+	path = drivers/net/wireless/realtek/rtl8188eus
+	url = https://github.com/aircrack-ng/rtl8188eus
