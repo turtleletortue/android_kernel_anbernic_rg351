@@ -116,10 +116,14 @@ gpio_keys: odroidgo3-keys {
                /* poll device interval (ms), adc read interval */
                poll-interval = <10>;
 
-               /* gpio button auto repeat set value : default disable */
-               /*
-                       autorepeat;
-               */
+		/* required for RG351MP */
+		invert-absx;
+		invert-absy;
+		
+		/* gpio button auto repeat set value : default disable */
+		/*
+			autorepeat;
+		*/
 
                /*
                      *** ODROIDGO3-Advance Switch layoout ***
@@ -658,15 +662,15 @@ gpio_keys: odroidgo3-keys {
 			native-mode = <&timing0>;
 
 			timing0: timing0 {
-				clock-frequency = <58000000>;
+				clock-frequency = <27500000>;
 				hactive = <640>;
 				vactive = <480>;
-				hfront-porch = <40>;
+				hfront-porch = <50>;
 				hsync-len = <2>;
-				hback-porch = <80>;
+				hback-porch = <90>;
 				vfront-porch = <18>;
 				vsync-len = <2>;
-				vback-porch = <28>;
+				vback-porch = <86>;
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <0>;
@@ -1156,6 +1160,7 @@ gpio_keys: odroidgo3-keys {
 /* RG351P Motor PWM */
 &pwm0 {
 	status = "okay";
+	pinctrl-names = "default", "active";
 };
 
 /* LCD Backlight PWM */
