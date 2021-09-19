@@ -37,7 +37,7 @@
 #include <linux/property.h>
 #include <linux/of_gpio.h>
 #include <linux/delay.h>
-
+#include <linux/pwm.h>
 /*----------------------------------------------------------------------------*/
 #define DRV_NAME "odroidgo3_joypad"
 
@@ -146,6 +146,9 @@ struct joypad {
 
 	/* amux debug channel */
 	int debug_ch;
+	
+	/* pwm device for rumble*/
+	struct pwm_device *rumble;
 };
 
 /*----------------------------------------------------------------------------*/
@@ -868,7 +871,39 @@ static int joypad_gpio_setup(struct device *dev, struct joypad *joypad)
 	return	0;
 }
 
+static int rumble_play_effect(struct input_dev *dev, void *data, struct ff_effect *effect)
+{
+	struct joypad *joypad = data;
+		
+	__u16 strong = effect->u.rumble.strong_magnitude;
+	__u16 weak = effect->u.rumble.weak_magnitude;
+	if (effect->type != FF_RUMBLE)
+		return 0;
+	if (strong == 0 && weak == 0)
+	{
+		pwm_config(joypad->rumble, 1000000, 1000000);
+	}
+	else
+	{
+		pwm_config(joypad->rumble, 500000, 1000000);	
+	}
+	dev_info(joypad->dev,"TONY: %d, %d\n",strong,weak);		
+	return 0;
+}
 /*----------------------------------------------------------------------------*/
+static int joypad_rumble_setup(struct device *dev, struct joypad *joypad)
+{
+	joypad->rumble = devm_pwm_get(dev, NULL);
+	if (IS_ERR(joypad->rumble))
+	{
+		dev_err(dev, "rumble get error\n");
+		return -EINVAL;
+	}
+	dev_info(dev, "rumble setup success!\n");
+	pwm_config(joypad->rumble, 1000000, 1000000);
+	pwm_enable(joypad->rumble);	
+	return 0;
+}
 static int joypad_input_setup(struct device *dev, struct joypad *joypad)
 {
 	struct input_polled_dev *poll_dev;
@@ -919,6 +954,16 @@ static int joypad_input_setup(struct device *dev, struct joypad *joypad)
 			"%s : adc tuning_p = %d, adc_tuning_n = %d\n\n",
 			__func__, adc->tuning_p, adc->tuning_n);
 	}
+
+	/* Rumble setip*/
+	input_set_capability(input, EV_FF, FF_RUMBLE);
+	error =input_ff_create_memless(input, joypad, rumble_play_effect);
+	if (error) {
+		dev_err(dev, "unable to register rumble, err=%d\n",
+			error);
+		return error;
+	}
+	
 
 	/* GPIO key setup */
 	__set_bit(EV_KEY, input->evbit);
@@ -1066,6 +1111,14 @@ static int joypad_probe(struct platform_device *pdev)
 		dev_err(dev, "input setup failed!(err = %d)\n", error);
 		return error;
 	}
+	
+	/* rumble setup */
+	error = joypad_rumble_setup(dev, joypad);
+	if (error) {
+		dev_err(dev, "rumble setup failed!(err = %d)\n", error);
+		return error;
+	}
+
 	dev_info(dev, "%s : probe success\n", __func__);
 	return 0;
 }
