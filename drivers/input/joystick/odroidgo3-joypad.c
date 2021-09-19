@@ -240,8 +240,8 @@ static int joypad_adc_read(struct analog_mux *amux, struct bt_adc *adc)
 		return 0;
 
 	value *= adc->scale;
-
-	return (adc->invert ? (adc->max - value) : value);
+	
+	return value;
 }
 
 /*----------------------------------------------------------------------------*/
