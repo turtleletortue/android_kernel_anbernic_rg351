@@ -885,7 +885,11 @@ static int rumble_play_effect(struct input_dev *dev, void *data, struct ff_effec
 	}
 	else
 	{
-		pwm_config(joypad->rumble, 500000, 1000000);	
+		if (strong)
+			pwm_config(joypad->rumble, 0, 1000000);	
+		else
+			pwm_config(joypad->rumble, 500000, 1000000);	
+		
 	}
 	dev_info(joypad->dev,"TONY: %d, %d\n",strong,weak);		
 	return 0;
