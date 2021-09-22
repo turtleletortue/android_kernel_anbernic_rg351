@@ -38,6 +38,7 @@
 #include <linux/of_gpio.h>
 #include <linux/delay.h>
 #include <linux/pwm.h>
+
 /*----------------------------------------------------------------------------*/
 #define DRV_NAME "odroidgo3_joypad"
 
@@ -45,6 +46,7 @@
 #define	ADC_MAX_VOLTAGE		1800
 #define	ADC_DATA_TUNING(x, p)	((x * p) / 100)
 #define	ADC_TUNING_DEFAULT	180
+
 
 /*----------------------------------------------------------------------------*/
 /*
@@ -148,8 +150,47 @@ struct joypad {
 	int debug_ch;
 	
 	/* pwm device for rumble*/
-	struct pwm_device *rumble;
+	struct input_dev *input;
+	struct pwm_device *pwm;
+	struct work_struct play_work;
+	u16 level;
 };
+
+static int pwm_vibrator_start(struct joypad *joypad)
+{
+	struct device *pdev = joypad->input->dev.parent;
+	struct pwm_state state;
+	int err;
+
+	pwm_get_state(joypad->pwm, &state);
+	pwm_set_relative_duty_cycle(&state, joypad->level, 0xffff);
+	state.enabled = true;
+
+	err = pwm_apply_state(joypad->pwm, &state);
+	if (err) {
+		dev_err(pdev, "failed to apply pwm state: %d", err);
+		return err;
+	}
+
+	return 0;
+}
+
+static void pwm_vibrator_stop(struct joypad *joypad)
+{
+	pwm_disable(joypad->pwm);
+}
+
+static void pwm_vibrator_play_work(struct work_struct *work)
+{
+	struct joypad *joypad = container_of(work,
+					struct joypad, play_work);
+
+	if (joypad->level)
+		pwm_vibrator_start(joypad);
+	else
+		pwm_vibrator_stop(joypad);
+}
+
 
 /*----------------------------------------------------------------------------*/
 //
@@ -638,6 +679,9 @@ static void joypad_close(struct input_polled_dev *poll_dev)
 	mutex_lock(&joypad->lock);
 	joypad->enable = false;
 	mutex_unlock(&joypad->lock);
+	
+	cancel_work_sync(&joypad->play_work);
+	pwm_vibrator_stop(joypad);
 
 	dev_info(joypad->dev, "%s : closed\n", __func__);
 }
@@ -874,38 +918,43 @@ static int joypad_gpio_setup(struct device *dev, struct joypad *joypad)
 static int rumble_play_effect(struct input_dev *dev, void *data, struct ff_effect *effect)
 {
 	struct joypad *joypad = data;
-		
-	__u16 strong = effect->u.rumble.strong_magnitude;
-	__u16 weak = effect->u.rumble.weak_magnitude;
+	
 	if (effect->type != FF_RUMBLE)
 		return 0;
-	if (strong == 0 && weak == 0)
-	{
-		pwm_config(joypad->rumble, 1000000, 1000000);
-	}
-	else
-	{
-		if (strong)
-			pwm_config(joypad->rumble, 0, 1000000);	
-		else
-			pwm_config(joypad->rumble, 500000, 1000000);	
-		
-	}
-	dev_info(joypad->dev,"TONY: %d, %d\n",strong,weak);		
+	
+	joypad->level = effect->u.rumble.strong_magnitude;
+	if (!joypad->level)
+		joypad->level = effect->u.rumble.weak_magnitude;
+	
+	dev_info(joypad->dev,"joypad->level = %d",  joypad->level);
+	schedule_work(&joypad->play_work);
 	return 0;
 }
 /*----------------------------------------------------------------------------*/
 static int joypad_rumble_setup(struct device *dev, struct joypad *joypad)
 {
-	joypad->rumble = devm_pwm_get(dev, NULL);
-	if (IS_ERR(joypad->rumble))
+	int err;
+	struct pwm_state state;
+
+	joypad->pwm = devm_pwm_get(dev, "enable");
+	if (IS_ERR(joypad->pwm))
 	{
 		dev_err(dev, "rumble get error\n");
 		return -EINVAL;
 	}
+
+	INIT_WORK(&joypad->play_work, pwm_vibrator_play_work);
+
+	/* Sync up PWM state and ensure it is off. */
+	pwm_init_state(joypad->pwm, &state);
+	state.enabled = false;
+	err = pwm_apply_state(joypad->pwm, &state);
+	if (err) {
+		dev_err(dev, "failed to apply initial PWM state: %d",
+			err);
+		return err;
+	}
 	dev_info(dev, "rumble setup success!\n");
-	pwm_config(joypad->rumble, 1000000, 1000000);
-	pwm_enable(joypad->rumble);	
 	return 0;
 }
 static int joypad_input_setup(struct device *dev, struct joypad *joypad)
@@ -929,7 +978,8 @@ static int joypad_input_setup(struct device *dev, struct joypad *joypad)
 	poll_dev->close		= joypad_close;
 
 	input = poll_dev->input;
-
+	joypad->input = poll_dev->input;
+	
 	device_property_read_string(dev, "joypad-name", &input->name);
 	input->phys = DRV_NAME"/input0";
 
@@ -961,7 +1011,7 @@ static int joypad_input_setup(struct device *dev, struct joypad *joypad)
 
 	/* Rumble setip*/
 	input_set_capability(input, EV_FF, FF_RUMBLE);
-	error =input_ff_create_memless(input, joypad, rumble_play_effect);
+	error = input_ff_create_memless(input, joypad, rumble_play_effect);
 	if (error) {
 		dev_err(dev, "unable to register rumble, err=%d\n",
 			error);
