@@ -46,7 +46,7 @@
 #define	ADC_MAX_VOLTAGE		1800
 #define	ADC_DATA_TUNING(x, p)	((x * p) / 100)
 #define	ADC_TUNING_DEFAULT	180
-
+#define	CLAMP(x, low, high)  (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 
 /*----------------------------------------------------------------------------*/
 /*
@@ -154,6 +154,8 @@ struct joypad {
 	struct pwm_device *pwm;
 	struct work_struct play_work;
 	u16 level;
+	u16 boost_weak;
+	u16 boost_strong;
 };
 
 static int pwm_vibrator_start(struct joypad *joypad)
@@ -918,13 +920,16 @@ static int joypad_gpio_setup(struct device *dev, struct joypad *joypad)
 static int rumble_play_effect(struct input_dev *dev, void *data, struct ff_effect *effect)
 {
 	struct joypad *joypad = data;
-	
+	u32 boosted_level;
 	if (effect->type != FF_RUMBLE)
 		return 0;
-	
-	joypad->level = effect->u.rumble.strong_magnitude;
-	if (!joypad->level)
-		joypad->level = effect->u.rumble.weak_magnitude;
+
+	if (effect->u.rumble.strong_magnitude)
+		boosted_level = effect->u.rumble.strong_magnitude + joypad->boost_strong;
+	else
+		boosted_level = effect->u.rumble.weak_magnitude + joypad->boost_weak;
+
+	joypad->level = (u16)CLAMP(boosted_level, 0, 0xffff);
 	
 	dev_info(joypad->dev,"joypad->level = %d",  joypad->level);
 	schedule_work(&joypad->play_work);
@@ -964,7 +969,8 @@ static int joypad_input_setup(struct device *dev, struct joypad *joypad)
 	int nbtn, error;
 	u32 joypad_revision = 0;
 	u32 joypad_product = 0;
-
+	u32 boost_weak = 0;
+	u32 boost_strong = 0;
 	poll_dev = devm_input_allocate_polled_device(dev);
 	if (!poll_dev) {
 		dev_err(dev, "no memory for polled device\n");
@@ -1010,6 +1016,11 @@ static int joypad_input_setup(struct device *dev, struct joypad *joypad)
 	}
 
 	/* Rumble setip*/
+	device_property_read_u32(dev, "rumble-boost-weak", &boost_weak);
+	device_property_read_u32(dev, "rumble-boost-strong", &boost_strong);
+	joypad->boost_weak = boost_weak;
+	joypad->boost_strong = boost_strong;
+	dev_info(dev, "Boost = %d, %d",boost_weak, boost_strong);
 	input_set_capability(input, EV_FF, FF_RUMBLE);
 	error = input_ff_create_memless(input, joypad, rumble_play_effect);
 	if (error) {

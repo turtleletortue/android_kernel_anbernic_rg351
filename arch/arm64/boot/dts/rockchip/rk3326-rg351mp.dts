@@ -39,9 +39,11 @@ gpio_keys: odroidgo3-keys {
 
        joypad: odroidgo3-joypad {
                 compatible = "odroidgo3-joypad";
-		 pwms = <&pwm0 0 20000000 0>;
-		 pwm-names = "enable";
-
+                pwms = <&pwm0 0 16666667 0>;		 
+                pwm-names = "enable";
+                rumble-boost-weak = <0x0000>;
+                rumble-boost-strong = <0x4CCC>;
+		 
                 joypad-name = "GO-Super Gamepad";
                 joypad-product = <0x1100>;
                 joypad-revision = <0x0100>;
