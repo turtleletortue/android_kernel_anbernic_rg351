@@ -542,6 +542,121 @@ static DEVICE_ATTR(amux_debug, S_IWUSR | S_IRUGO,
 
 /*----------------------------------------------------------------------------*/
 /*----------------------------------------------------------------------------*/
+/*
+ * ATTRIBUTES:
+ *
+ * /sys/devices/platform/odroidgo2_joypad/rumble_period [rw]
+ */
+/*----------------------------------------------------------------------------*/
+static ssize_t joypad_store_period(struct device *dev,
+				      struct device_attribute *attr,
+				      const char *buf,
+				      size_t count)
+{
+	struct platform_device *pdev  = to_platform_device(dev);
+	struct joypad *joypad = platform_get_drvdata(pdev);
+
+	mutex_lock(&joypad->lock);
+	pwm_set_period(joypad->pwm, simple_strtoul(buf, NULL, 21));
+	mutex_unlock(&joypad->lock);
+
+	return count;
+}
+
+/*----------------------------------------------------------------------------*/
+static ssize_t joypad_show_period(struct device *dev,
+				     struct device_attribute *attr,
+				     char *buf)
+{
+	struct platform_device *pdev  = to_platform_device(dev);
+	struct joypad *joypad = platform_get_drvdata(pdev);
+	
+	return sprintf(buf, "%d\n", pwm_get_period(joypad->pwm));
+}
+
+/*----------------------------------------------------------------------------*/
+static DEVICE_ATTR(rumble_period, S_IWUSR | S_IRUGO,
+		   joypad_show_period,
+		   joypad_store_period);
+
+
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+/*
+ * ATTRIBUTES:
+ *
+ * /sys/devices/platform/odroidgo2_joypad/rumble_boost_strong [rw]
+ */
+/*----------------------------------------------------------------------------*/
+static ssize_t joypad_store_boost_strong(struct device *dev,
+				      struct device_attribute *attr,
+				      const char *buf,
+				      size_t count)
+{
+	struct platform_device *pdev  = to_platform_device(dev);
+	struct joypad *joypad = platform_get_drvdata(pdev);
+
+	mutex_lock(&joypad->lock);
+	joypad->boost_strong = simple_strtoul(buf, NULL, 10);
+	mutex_unlock(&joypad->lock);
+
+	return count;
+}
+
+/*----------------------------------------------------------------------------*/
+static ssize_t joypad_show_boost_strong(struct device *dev,
+				     struct device_attribute *attr,
+				     char *buf)
+{
+	struct platform_device *pdev  = to_platform_device(dev);
+	struct joypad *joypad = platform_get_drvdata(pdev);
+
+	return sprintf(buf, "%d\n", joypad->boost_strong);
+}
+
+/*----------------------------------------------------------------------------*/
+static DEVICE_ATTR(rumble_boost_strong, S_IWUSR | S_IRUGO,
+		   joypad_show_boost_strong,
+		   joypad_store_boost_strong);
+
+/*----------------------------------------------------------------------------*/
+/*
+ * ATTRIBUTES:
+ *
+ * /sys/devices/platform/odroidgo2_joypad/rumble_boost_weak [rw]
+ */
+/*----------------------------------------------------------------------------*/
+static ssize_t joypad_store_boost_weak(struct device *dev,
+				      struct device_attribute *attr,
+				      const char *buf,
+				      size_t count)
+{
+	struct platform_device *pdev  = to_platform_device(dev);
+	struct joypad *joypad = platform_get_drvdata(pdev);
+
+	mutex_lock(&joypad->lock);
+	joypad->boost_weak = simple_strtoul(buf, NULL, 10);
+	mutex_unlock(&joypad->lock);
+
+	return count;
+}
+
+/*----------------------------------------------------------------------------*/
+static ssize_t joypad_show_boost_weak(struct device *dev,
+				     struct device_attribute *attr,
+				     char *buf)
+{
+	struct platform_device *pdev  = to_platform_device(dev);
+	struct joypad *joypad = platform_get_drvdata(pdev);
+
+	return sprintf(buf, "%d\n", joypad->boost_weak);
+}
+
+/*----------------------------------------------------------------------------*/
+static DEVICE_ATTR(rumble_boost_weak, S_IWUSR | S_IRUGO,
+		   joypad_show_boost_weak,
+		   joypad_store_boost_weak);
+
 static struct attribute *joypad_attrs[] = {
 	&dev_attr_poll_interval.attr,
 	&dev_attr_adc_fuzz.attr,
@@ -549,6 +664,9 @@ static struct attribute *joypad_attrs[] = {
 	&dev_attr_enable.attr,
 	&dev_attr_adc_cal.attr,
 	&dev_attr_amux_debug.attr,
+	&dev_attr_rumble_period.attr,
+	&dev_attr_rumble_boost_strong.attr,
+	&dev_attr_rumble_boost_weak.attr,
 	NULL,
 };
 
