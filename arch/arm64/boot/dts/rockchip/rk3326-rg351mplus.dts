@@ -388,10 +388,10 @@ gpio_keys: odroidgo3-keys {
 		0               13
 		1               13
 	>;
-	/delete-node/ opp-408000000;
-	/delete-node/ opp-600000000;
-	/delete-node/ opp-816000000;
+	/delete-node/ opp-96000000;
+	/delete-node/ opp-216000000;
 	/delete-node/ opp-1416000000;
+	/delete-node/ opp-1512000000;
 };
 
 &cif {
