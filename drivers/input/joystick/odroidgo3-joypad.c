@@ -1258,6 +1258,31 @@ static int joypad_dt_parse(struct device *dev, struct joypad *joypad)
 	return error;
 }
 
+static int __maybe_unused joypad_suspend(struct device *dev)
+{
+	struct platform_device *pdev  = to_platform_device(dev);
+	struct joypad *joypad = platform_get_drvdata(pdev);
+
+	cancel_work_sync(&joypad->play_work);
+	if (joypad->level)
+		pwm_vibrator_stop(joypad);
+
+	return 0;
+}
+
+static int __maybe_unused joypad_resume(struct device *dev)
+{
+	struct platform_device *pdev  = to_platform_device(dev);
+	struct joypad *joypad = platform_get_drvdata(pdev);
+
+	if (joypad->level)
+		pwm_vibrator_start(joypad);
+
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(joypad_pm_ops,
+			 joypad_suspend, joypad_resume);
 /*----------------------------------------------------------------------------*/
 static int joypad_probe(struct platform_device *pdev)
 {
@@ -1319,6 +1344,7 @@ static struct platform_driver joypad_driver = {
 	.probe = joypad_probe,
 	.driver = {
 		.name = DRV_NAME,
+		.pm = &joypad_pm_ops,
 		.of_match_table = of_match_ptr(joypad_of_match),
 	},
 };
