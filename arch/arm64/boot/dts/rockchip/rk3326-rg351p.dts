@@ -186,10 +186,14 @@
 		0               13
 		1               13
 	>;
-	/delete-node/ opp-96000000;
-	/delete-node/ opp-216000000;
-	/delete-node/ opp-1416000000;
-	/delete-node/ opp-1512000000;
+    /delete-node/ opp-96000000;
+    /delete-node/ opp-216000000;
+    /delete-node/ opp-1368000000;
+    /delete-node/ opp-1416000000;
+    /delete-node/ opp-1440000000;
+    /delete-node/ opp-1464000000;
+    /delete-node/ opp-1488000000;
+    /delete-node/ opp-1512000000;
 };
 
 &cif {
